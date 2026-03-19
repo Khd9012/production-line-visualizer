@@ -1,4 +1,6 @@
 import { useEffect } from "react";
+import { connectCoreRealtime } from "./services/coreRealtime";
+import { fetchDatabaseStatus, fetchRunningSchedulers } from "./services/coreApi";
 import { ControlTabs } from "./components/ControlTabs";
 import { DetailPanel } from "./components/DetailPanel";
 import { EventTimeline } from "./components/EventTimeline";
@@ -16,8 +18,17 @@ export default function App() {
     activeRecipe,
     selectedPanel,
     events,
+    connectionStatus,
+    databaseAlive,
+    schedulerSummary,
+    liveDeviceCount,
+    lastRealtimeAt,
     tick,
-    setSelectedPanel
+    setSelectedPanel,
+    setConnectionStatus,
+    setDatabaseAlive,
+    setSchedulerSummary,
+    ingestCoreSnapshot
   } = useSimulationStore();
 
   useEffect(() => {
@@ -27,6 +38,50 @@ export default function App() {
 
     return () => window.clearInterval(timer);
   }, [tick]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCoreStatus = async () => {
+      try {
+        const [dbAlive, schedulers] = await Promise.all([fetchDatabaseStatus(), fetchRunningSchedulers()]);
+        if (cancelled) {
+          return;
+        }
+
+        setDatabaseAlive(dbAlive);
+        setSchedulerSummary(schedulers.replace("실행 중인 작업 목록: ", "") || "none");
+      } catch {
+        if (cancelled) {
+          return;
+        }
+
+        setDatabaseAlive(false);
+        setSchedulerSummary("unavailable");
+      }
+    };
+
+    void loadCoreStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setDatabaseAlive, setSchedulerSummary]);
+
+  useEffect(() => {
+    setConnectionStatus("connecting");
+
+    const disconnect = connectCoreRealtime({
+      onConnected: () => setConnectionStatus("live"),
+      onDisconnected: () => setConnectionStatus("offline"),
+      onMessage: (payload) => ingestCoreSnapshot(payload),
+      onError: () => setConnectionStatus("offline")
+    });
+
+    return () => {
+      disconnect();
+    };
+  }, [ingestCoreSnapshot, setConnectionStatus]);
 
   const leadCargo = cargos[cargos.length - 1];
   const totalStacked = palletLayers.reduce((sum, layer) => sum + layer.filledCount, 0);
@@ -47,9 +102,14 @@ export default function App() {
       </div>
 
       <section className="stats-grid">
-        <StatCard label="Current Throughput" value={`${throughput} bx/h`} meta="simulated live output" tone="accent" />
+        <StatCard label="Current Throughput" value={`${throughput} bx/h`} meta="hybrid sim + core feed" tone="accent" />
         <StatCard label="Robot Cycle" value={`${Math.round(robot.cycleProgress * 100)}%`} meta={robot.mode} />
         <StatCard label="Active Cargo" value={leadCargo?.id ?? "None"} meta={leadCargo?.state ?? "idle"} />
+        <StatCard
+          label="Realtime Link"
+          value={connectionStatus === "live" ? "ONLINE" : connectionStatus.toUpperCase()}
+          meta={`db ${databaseAlive === null ? "..." : databaseAlive ? "ok" : "down"} / ${liveDeviceCount} devices`}
+        />
         <StatCard label="Pallet Fill" value={`${totalStacked}/27`} meta="three-layer recipe" />
       </section>
 
@@ -61,6 +121,11 @@ export default function App() {
           leadCargo={leadCargo}
           layers={palletLayers}
           current={selectedPanel}
+          connectionStatus={connectionStatus}
+          databaseAlive={databaseAlive}
+          schedulerSummary={schedulerSummary}
+          liveDeviceCount={liveDeviceCount}
+          lastRealtimeAt={lastRealtimeAt}
         />
         <PalletStackPanel layers={palletLayers} />
         <EventTimeline events={events} />

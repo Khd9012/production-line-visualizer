@@ -5,6 +5,18 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    host: true
+    host: true,
+    proxy: {
+      "/api": {
+        target: "http://localhost:8902",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, "")
+      },
+      "/ws-stomp": {
+        target: "ws://localhost:8902",
+        ws: true,
+        changeOrigin: true
+      }
+    }
   }
 });

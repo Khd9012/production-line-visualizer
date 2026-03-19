@@ -49,3 +49,18 @@ export type RobotState = {
   activeCargoId?: string;
   cycleProgress: number;
 };
+
+export type CoreDeviceStatus = {
+  areaType?: string;
+  deviceCode: string;
+  deviceType?: string;
+  deviceName?: string;
+  ctrlStatus?: string;
+  status?: string;
+  statusCode?: string;
+  errorLevel?: number;
+  statusDesc?: string;
+  workId?: string;
+  triggeredAt?: string;
+  detail?: Record<string, string>;
+};

@@ -6,9 +6,25 @@ type DetailPanelProps = {
   leadCargo: Cargo | undefined;
   layers: PalletLayer[];
   current: "overview" | "robot" | "pallet";
+  connectionStatus: "connecting" | "live" | "offline";
+  databaseAlive: boolean | null;
+  schedulerSummary: string;
+  liveDeviceCount: number;
+  lastRealtimeAt: string | null;
 };
 
-export function DetailPanel({ activeRecipe, robot, leadCargo, layers, current }: DetailPanelProps) {
+export function DetailPanel({
+  activeRecipe,
+  robot,
+  leadCargo,
+  layers,
+  current,
+  connectionStatus,
+  databaseAlive,
+  schedulerSummary,
+  liveDeviceCount,
+  lastRealtimeAt
+}: DetailPanelProps) {
   const currentLayer = layers.find((layer) => layer.filledCount < layer.totalCount) ?? layers[layers.length - 1];
   const fillRate = Math.round(
     (layers.reduce((sum, layer) => sum + layer.filledCount, 0) /
@@ -63,6 +79,24 @@ export function DetailPanel({ activeRecipe, robot, leadCargo, layers, current }:
       </div>
 
       <div className="detail-list">
+        <article>
+          <span>Realtime Link</span>
+          <strong>{connectionStatus}</strong>
+        </article>
+        <article>
+          <span>Database Health</span>
+          <strong>{databaseAlive === null ? "checking" : databaseAlive ? "healthy" : "offline"}</strong>
+        </article>
+        <article>
+          <span>Scheduler State</span>
+          <strong>{schedulerSummary}</strong>
+        </article>
+        <article>
+          <span>Live Device Frames</span>
+          <strong>
+            {liveDeviceCount} devices {lastRealtimeAt ? `at ${lastRealtimeAt}` : ""}
+          </strong>
+        </article>
         <article>
           <span>Pick Position</span>
           <strong>BUF-02 / PICK-01 handoff</strong>

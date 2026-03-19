@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { railSegments } from "../data/layout";
-import type { Cargo, CargoState, EventItem, PalletCell, PalletLayer, RobotState } from "../types";
+import type { Cargo, CargoState, CoreDeviceStatus, EventItem, PalletCell, PalletLayer, RobotState } from "../types";
 
 type SimulationState = {
   cargos: Cargo[];
@@ -10,8 +10,17 @@ type SimulationState = {
   activeRecipe: string;
   selectedPanel: "overview" | "robot" | "pallet";
   events: EventItem[];
+  connectionStatus: "connecting" | "live" | "offline";
+  databaseAlive: boolean | null;
+  schedulerSummary: string;
+  liveDeviceCount: number;
+  lastRealtimeAt: string | null;
   tick: () => void;
   setSelectedPanel: (panel: "overview" | "robot" | "pallet") => void;
+  setConnectionStatus: (status: "connecting" | "live" | "offline") => void;
+  setDatabaseAlive: (alive: boolean) => void;
+  setSchedulerSummary: (summary: string) => void;
+  ingestCoreSnapshot: (snapshot: CoreDeviceStatus[]) => void;
 };
 
 const formatTime = () =>
@@ -54,6 +63,12 @@ const createInitialCargos = (): Cargo[] => [
 const appendEvent = (events: EventItem[], title: string, detail: string, tone: EventItem["tone"]): EventItem[] =>
   [{ id: `${Date.now()}-${Math.random()}`, time: formatTime(), title, detail, tone }, ...events].slice(0, 8);
 
+const stateToneMap: Record<string, EventItem["tone"]> = {
+  "2": "warn",
+  "1": "accent",
+  "0": "normal"
+};
+
 export const useSimulationStore = create<SimulationState>((set) => ({
   cargos: createInitialCargos(),
   palletLayers: createInitialLayers(),
@@ -67,12 +82,41 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   throughput: 148,
   activeRecipe: "9-box brick stack / 3 layers",
   selectedPanel: "overview",
+  connectionStatus: "connecting",
+  databaseAlive: null,
+  schedulerSummary: "loading scheduler state",
+  liveDeviceCount: 0,
+  lastRealtimeAt: null,
   events: [
     { id: "evt-1", time: formatTime(), title: "Pallet Layer 3", detail: "BX-204 placed at row 1 / col 3", tone: "accent" },
     { id: "evt-2", time: formatTime(), title: "Buffer Ready", detail: "BUF-02 waiting for palletizer pickup", tone: "normal" },
     { id: "evt-3", time: formatTime(), title: "Robot Cycle", detail: "Arm tracking inbound cargo on PICK-01", tone: "normal" }
   ],
   setSelectedPanel: (selectedPanel) => set({ selectedPanel }),
+  setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
+  setDatabaseAlive: (databaseAlive) => set({ databaseAlive }),
+  setSchedulerSummary: (schedulerSummary) => set({ schedulerSummary }),
+  ingestCoreSnapshot: (snapshot) =>
+    set((state) => {
+      const activeDevices = snapshot.filter((item) => item.status === "1" || item.status === "2");
+      const errorDevices = snapshot.filter((item) => item.status === "2");
+      const latest = activeDevices[0] ?? snapshot[0];
+      const nextEvents = latest
+        ? appendEvent(
+            state.events,
+            latest.deviceName ?? latest.deviceCode,
+            `${latest.deviceCode} -> ${latest.statusDesc ?? latest.status ?? "update"}`,
+            stateToneMap[latest.status ?? "0"] ?? "normal"
+          )
+        : state.events;
+
+      return {
+        liveDeviceCount: snapshot.length,
+        lastRealtimeAt: formatTime(),
+        throughput: Math.max(120, 120 + activeDevices.length * 2 - errorDevices.length * 3),
+        events: nextEvents
+      };
+    }),
   tick: () =>
     set((state) => {
       const nextCargos = state.cargos.map((cargo) => {
