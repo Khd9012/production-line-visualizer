@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { lineBranchMap, outboundDocks, palletCellAnchors, pickupAnchor, trackNodeMap } from "../data/layout";
+import { lineBranchMap, outboundDocks, palletCellAnchors, pickupAnchor, sourceTrunkJunctions, trackNodeMap } from "../data/layout";
 import type {
   Cargo,
   CargoRailPhase,
@@ -120,10 +120,10 @@ const getNextPalletTarget = (stackedCargoIds: string[]) => {
 };
 
 const createFallbackCargos = (): Cargo[] => [
-  { id: "BX-201", segmentIndex: 0, progress: 0.14, line: "L1", railPhase: "mainline", state: "moving", color: palette[0], x: 122, y: 106, interceptorIndex: 1 },
-  { id: "BX-202", segmentIndex: 0, progress: 0.38, line: "L3", railPhase: "branching", state: "moving", color: palette[1], x: 282, y: 190, interceptorIndex: 3 },
-  { id: "BX-203", segmentIndex: 0, progress: 0.7, line: "L5", railPhase: "interceptor", state: "buffered", color: palette[2], x: 622, y: 312, interceptorIndex: 7 },
-  { id: "BX-204", segmentIndex: 0, progress: 0.92, line: "QC", railPhase: "inspection", state: "picked", color: palette[3], x: 754, y: 198, interceptorIndex: 9 }
+  { id: "BX-201", segmentIndex: 0, progress: 0.12, line: "L1", railPhase: "mainline", state: "moving", color: palette[0], x: 166, y: 144, interceptorIndex: 1 },
+  { id: "BX-202", segmentIndex: 0, progress: 0.34, line: "L3", railPhase: "branching", state: "moving", color: palette[1], x: 542, y: 224, interceptorIndex: 3 },
+  { id: "BX-203", segmentIndex: 0, progress: 0.68, line: "L5", railPhase: "interceptor", state: "buffered", color: palette[2], x: 998, y: 370, interceptorIndex: 7 },
+  { id: "BX-204", segmentIndex: 0, progress: 0.88, line: "QC", railPhase: "inspection", state: "picked", color: palette[3], x: 1190, y: 260, interceptorIndex: 9 }
 ];
 
 const getCargoStateByDevice = (deviceCode: string): CargoState => {
@@ -166,41 +166,52 @@ const getCargoPhaseByProgress = (line: string, progress: number): CargoRailPhase
 
 const getCargoCoordinates = (line: string, progress: number) => {
   const branch = lineBranchMap[line as keyof typeof lineBranchMap] ?? lineBranchMap.L1;
+  const junction = sourceTrunkJunctions[branch.source as keyof typeof sourceTrunkJunctions];
+  const intakeY = junction.splitY;
 
   if (line === "QC") {
     return {
-      x: 748,
-      y: 132 + progress * 252
+      x: 1198,
+      y: 144 + Math.min(0.95, progress) * 320
     };
   }
 
-  if (progress < 0.22) {
+  if (progress < 0.16) {
+    const phaseProgress = progress / 0.16;
     return {
-      x: 92 + progress * 1250,
-      y: 106
+      x: 112 + phaseProgress * 220,
+      y: intakeY
     };
   }
 
-  if (progress < 0.46) {
-    const phaseProgress = (progress - 0.22) / 0.24;
+  if (progress < 0.34) {
+    const phaseProgress = (progress - 0.16) / 0.18;
     return {
-      x: branch.splitX + phaseProgress * 86,
-      y: 106 + (branch.mergeY - 106) * phaseProgress
+      x: junction.splitX + phaseProgress * 150,
+      y: intakeY + (144 - intakeY) * phaseProgress
     };
   }
 
-  if (progress < 0.8) {
-    const phaseProgress = (progress - 0.46) / 0.34;
+  if (progress < 0.56) {
+    const phaseProgress = (progress - 0.34) / 0.22;
     return {
-      x: 254 + (branch.interceptorX - 254) * phaseProgress,
-      y: branch.mergeY
+      x: 458 + (branch.splitX - 458) * phaseProgress,
+      y: 144
     };
   }
 
-  const phaseProgress = (progress - 0.8) / 0.2;
+  if (progress < 0.82) {
+    const phaseProgress = (progress - 0.56) / 0.26;
+    return {
+      x: branch.splitX + (branch.interceptorX - branch.splitX) * phaseProgress,
+      y: 144 + (branch.mergeY - 144) * Math.min(1, phaseProgress * 1.15)
+    };
+  }
+
+  const phaseProgress = (progress - 0.82) / 0.18;
   return {
-    x: branch.interceptorX + (748 - branch.interceptorX) * phaseProgress,
-    y: branch.interceptorY + (250 - branch.interceptorY) * phaseProgress
+    x: branch.interceptorX + (1196 - branch.interceptorX) * phaseProgress,
+    y: branch.interceptorY + (302 - branch.interceptorY) * phaseProgress
   };
 };
 
@@ -231,7 +242,7 @@ const toCargoFromSnapshot = (snapshot: CoreDeviceStatus[], stackedCargoIds: stri
         const node = trackNodeMap[item.deviceCode];
         const progress = Math.min(
           0.95,
-          inspectionDeviceCodes.has(item.deviceCode) ? 0.74 + index * 0.02 : Number.parseInt(item.deviceCode.slice(-2), 10) / 12
+          inspectionDeviceCodes.has(item.deviceCode) ? 0.82 + index * 0.015 : Math.min(0.84, Number.parseInt(item.deviceCode.slice(-2), 10) / 12)
         );
 
         return {
@@ -355,8 +366,8 @@ const buildMainRobotState = (
 
 const buildInterceptorRobots = (cargos: Cargo[], previousRobots: InterceptorRobotState[], speedFactor: number): InterceptorRobotState[] => {
   const definitions = [
-    { id: "INT-R1", label: "Interceptor R1", zone: "north" as const, baseX: 688, baseY: 194, releaseX: 722, releaseY: 208, lines: northLines, lineGroup: "L1-L3" },
-    { id: "INT-R2", label: "Interceptor R2", zone: "south" as const, baseX: 688, baseY: 340, releaseX: 722, releaseY: 332, lines: southLines, lineGroup: "L4-L7" }
+    { id: "INT-R1", label: "Interceptor R1", zone: "north" as const, baseX: 1310, baseY: 204, releaseX: 1188, releaseY: 220, lines: northLines, lineGroup: "L1-L3" },
+    { id: "INT-R2", label: "Interceptor R2", zone: "south" as const, baseX: 1310, baseY: 346, releaseX: 1188, releaseY: 362, lines: southLines, lineGroup: "L4-L7" }
   ];
 
   return definitions.map((definition, index) => {
@@ -488,8 +499,8 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   palletLayers: createLayersFromStack(["L1-1", "L1-2", "L1-3", "L1-4", "L1-5", "L1-6", "L1-7", "L1-8", "L1-9", "L2-1", "L2-2"]),
   robot: {
     mode: "tracking",
-    armX: 918,
-    armY: 170,
+    armX: 1340,
+    armY: 214,
     activeCargoId: "BX-204",
     cycleProgress: 0.14,
     phase: "rotate",
@@ -497,8 +508,8 @@ export const useSimulationStore = create<SimulationState>((set) => ({
     pickY: pickupAnchor.y
   },
   interceptorRobots: [
-    { id: "INT-R1", label: "Interceptor R1", zone: "north", armX: 688, armY: 194, phase: "idle", cycleProgress: 0, lineGroup: "L1-L3" },
-    { id: "INT-R2", label: "Interceptor R2", zone: "south", armX: 688, armY: 340, phase: "idle", cycleProgress: 0, lineGroup: "L4-L7" }
+    { id: "INT-R1", label: "Interceptor R1", zone: "north", armX: 1310, armY: 204, phase: "idle", cycleProgress: 0, lineGroup: "L1-L3" },
+    { id: "INT-R2", label: "Interceptor R2", zone: "south", armX: 1310, armY: 346, phase: "idle", cycleProgress: 0, lineGroup: "L4-L7" }
   ],
   outboundPallets: [],
   releasedStackBaseline: 0,

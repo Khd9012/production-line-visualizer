@@ -1,4 +1,4 @@
-import { focusViewBoxes, lineBranchMap, mainRailPath, outboundDocks, palletCellAnchors, pickupAnchor, processZones, trackNodes } from "../data/layout";
+import { focusViewBoxes, intakeSources, lineBranchMap, mainRailPath, outboundDocks, palletCellAnchors, pickupAnchor, processZones, trackNodes } from "../data/layout";
 import type { Cargo, FocusLine, InterceptorRobotState, OutboundPallet, PalletLayer, PlaybackSpeed, RobotState } from "../types";
 
 type FloorViewProps = {
@@ -19,13 +19,13 @@ const zoneToneMap = {
 };
 
 const lineLabelY: Record<string, number> = {
-  L1: 152,
-  L2: 196,
-  L3: 240,
-  L4: 284,
-  L5: 328,
-  L6: 372,
-  L7: 416
+  L1: 184,
+  L2: 234,
+  L3: 284,
+  L4: 334,
+  L5: 384,
+  L6: 434,
+  L7: 484
 };
 
 const getPalletOffset = (layer: number) => ({
@@ -103,8 +103,8 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
             </radialGradient>
           </defs>
 
-          <rect x="0" y="0" width="1180" height="560" rx="28" fill="url(#floorGradient)" />
-          <rect x="20" y="22" width="1140" height="516" rx="26" fill="rgba(6, 15, 26, 0.22)" stroke="rgba(126, 166, 205, 0.18)" />
+          <rect x="0" y="0" width="1660" height="620" rx="28" fill="url(#floorGradient)" />
+          <rect x="20" y="22" width="1620" height="576" rx="26" fill="rgba(6, 15, 26, 0.22)" stroke="rgba(126, 166, 205, 0.18)" />
 
           {processZones.map((zone) => {
             const tone = zoneToneMap[zone.tone];
@@ -123,10 +123,32 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
 
           {Object.entries(lineLabelY).map(([line, y]) => (
             <g key={line} opacity={isLineVisible(line, focusedLine) ? 1 : 0.16}>
-              <text x="64" y={y} fill="#b7d2ea" fontSize="14" fontWeight="700">
+              <text x="512" y={y} fill="#b7d2ea" fontSize="14" fontWeight="700">
                 {line}
               </text>
-              <line x1="250" y1={y - 4} x2="630" y2={y - 4} stroke={focusedLine === line ? "#7dd3c4" : "#284863"} strokeWidth={focusedLine === line ? "6" : "4"} strokeLinecap="round" />
+              <line x1="618" y1={y - 14} x2="1114" y2={y - 14} stroke={focusedLine === line ? "#7dd3c4" : "#284863"} strokeWidth={focusedLine === line ? "6" : "4"} strokeLinecap="round" />
+            </g>
+          ))}
+
+          {intakeSources.map((source, index) => (
+            <g key={source.id}>
+              <path
+                d={`M ${source.x} ${source.y} L ${source.toX} ${source.toY}`}
+                fill="none"
+                stroke="#27425e"
+                strokeWidth="16"
+                strokeLinecap="round"
+              />
+              <path
+                d={`M ${source.x} ${source.y} L ${source.toX} ${source.toY}`}
+                fill="none"
+                stroke={index === 0 ? "#7dd3c4" : index === 1 ? "#8ea7ff" : "#ffd166"}
+                strokeWidth="4"
+                strokeLinecap="round"
+              />
+              <text x={source.x - 18} y={source.y + 6} fill="#eff6fc" fontSize="12" fontWeight="700">
+                {source.id}
+              </text>
             </g>
           ))}
 
@@ -140,7 +162,7 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
               return (
                 <g key={line} opacity={active ? 1 : 0.12}>
                   <path
-                    d={`M ${branch.splitX} 118 Q ${branch.splitX + 16} ${branch.mergeY - 22} ${branch.splitX + 42} ${branch.mergeY} L ${branch.interceptorX} ${branch.interceptorY}`}
+                    d={`M ${branch.splitX} 144 Q ${branch.splitX + 28} ${branch.mergeY - 34} ${branch.splitX + 64} ${branch.mergeY} L ${branch.interceptorX} ${branch.interceptorY}`}
                     fill="none"
                     stroke="#26435f"
                     strokeWidth="14"
@@ -148,7 +170,7 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
                     strokeLinejoin="round"
                   />
                   <path
-                    d={`M ${branch.splitX} 118 Q ${branch.splitX + 16} ${branch.mergeY - 22} ${branch.splitX + 42} ${branch.mergeY} L ${branch.interceptorX} ${branch.interceptorY}`}
+                    d={`M ${branch.splitX} 144 Q ${branch.splitX + 28} ${branch.mergeY - 34} ${branch.splitX + 64} ${branch.mergeY} L ${branch.interceptorX} ${branch.interceptorY}`}
                     fill="none"
                     stroke={focusedLine === line ? "#7dd3c4" : "#4f7593"}
                     strokeWidth="3.5"
@@ -163,10 +185,10 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
               );
             })}
 
-          <path d="M 748 132 L 748 414" fill="none" stroke="#4f6c8e" strokeWidth="16" strokeLinecap="round" opacity="0.4" />
-          <path d="M 748 132 L 748 414" fill="none" stroke="#ffd166" strokeWidth="4" strokeLinecap="round" opacity="0.82" />
-          <path d={`M 748 250 C 816 250, 848 210, ${pickupAnchor.x} ${pickupAnchor.y}`} fill="none" stroke="#6789ad" strokeWidth="10" strokeLinecap="round" opacity="0.5" />
-          <path d={`M 748 250 C 816 250, 848 210, ${pickupAnchor.x} ${pickupAnchor.y}`} fill="none" stroke="#8bb0d7" strokeWidth="3" strokeLinecap="round" opacity="0.8" />
+          <path d="M 1198 144 L 1198 492" fill="none" stroke="#4f6c8e" strokeWidth="18" strokeLinecap="round" opacity="0.4" />
+          <path d="M 1198 144 L 1198 492" fill="none" stroke="#ffd166" strokeWidth="4" strokeLinecap="round" opacity="0.82" />
+          <path d={`M 1198 298 C 1260 298, 1304 262, ${pickupAnchor.x} ${pickupAnchor.y}`} fill="none" stroke="#6789ad" strokeWidth="10" strokeLinecap="round" opacity="0.5" />
+          <path d={`M 1198 298 C 1260 298, 1304 262, ${pickupAnchor.x} ${pickupAnchor.y}`} fill="none" stroke="#8bb0d7" strokeWidth="3" strokeLinecap="round" opacity="0.8" />
 
           {trackNodes.map((node) => {
             const active = isLineVisible(node.line, focusedLine);
@@ -191,23 +213,23 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
           })}
 
           <g>
-            <rect x="912" y="126" width="178" height="42" rx="18" fill="#12253b" stroke="#4c759c" />
-            <text x="930" y="152" fill="#dbe8f4" fontSize="14" fontWeight="700">
+            <rect x="1346" y="146" width="206" height="42" rx="18" fill="#12253b" stroke="#4c759c" />
+            <text x="1370" y="172" fill="#dbe8f4" fontSize="14" fontWeight="700">
               Robot pick corridor
             </text>
-            <rect x="912" y="215" width="178" height="42" rx="18" fill="#13263d" stroke="#4f78b6" />
-            <text x="930" y="241" fill="#dbe8f4" fontSize="14" fontWeight="700">
+            <rect x="1392" y="316" width="176" height="42" rx="18" fill="#13263d" stroke="#4f78b6" />
+            <text x="1416" y="342" fill="#dbe8f4" fontSize="14" fontWeight="700">
               Precision place corridor
             </text>
           </g>
 
           <g>
-            <circle cx="1004" cy="268" r="86" fill="url(#stackGlow)" />
-            <rect x="928" y="212" width="162" height="132" rx="24" fill="rgba(10, 22, 35, 0.78)" stroke="#7395bf" strokeWidth="2.5" />
-            <text x="946" y="202" fill="#eef6ff" fontSize="14" fontWeight="700">
+            <circle cx="1484" cy="396" r="96" fill="url(#stackGlow)" />
+            <rect x="1386" y="322" width="188" height="154" rx="24" fill="rgba(10, 22, 35, 0.78)" stroke="#7395bf" strokeWidth="2.5" />
+            <text x="1404" y="312" fill="#eef6ff" fontSize="14" fontWeight="700">
               Pallet target coordinates
             </text>
-            <rect x="936" y="220" width="146" height="116" rx="14" fill="#23384d" stroke="#dce7f3" strokeDasharray="6 6" />
+            <rect x="1398" y="332" width="170" height="148" rx="14" fill="#23384d" stroke="#dce7f3" strokeDasharray="6 6" />
 
             {layers.flatMap((layer) =>
               layer.cells
@@ -255,16 +277,16 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
           </g>
 
           <g>
-            <circle cx="1004" cy="148" r="22" fill="#244057" stroke="#dce7f3" strokeWidth="3" />
-            <line x1="1004" y1="148" x2={robot.armX} y2={robot.armY} stroke="#d7e6f3" strokeWidth="10" strokeLinecap="round" />
-            <line x1="1004" y1="148" x2={robot.armX} y2={robot.armY} stroke="#607e9a" strokeWidth="4" strokeLinecap="round" />
+            <circle cx="1488" cy="186" r="22" fill="#244057" stroke="#dce7f3" strokeWidth="3" />
+            <line x1="1488" y1="186" x2={robot.armX} y2={robot.armY} stroke="#d7e6f3" strokeWidth="10" strokeLinecap="round" />
+            <line x1="1488" y1="186" x2={robot.armX} y2={robot.armY} stroke="#607e9a" strokeWidth="4" strokeLinecap="round" />
             <circle cx={pickupAnchor.x} cy={pickupAnchor.y} r="16" fill="#13263d" stroke="#9bc2e3" strokeWidth="2.5" />
             <text x={pickupAnchor.x} y={pickupAnchor.y + 4} fill="#eef7ff" fontSize="10" textAnchor="middle">
               PICK
             </text>
             <circle cx={robot.armX} cy={robot.armY} r="18" fill="#f25f5c" style={{ transitionDuration }} />
             <circle cx={robot.armX} cy={robot.armY} r="7" fill="#ffe9d0" style={{ transitionDuration }} />
-            <text x="1032" y="150" fill="#f0f5fa" fontSize="12">
+            <text x="1518" y="190" fill="#f0f5fa" fontSize="12">
               {robot.phase ?? robot.mode}
             </text>
           </g>
@@ -272,10 +294,10 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
           <g>
             {interceptorRobots.map((interceptorRobot) => (
               <g key={interceptorRobot.id}>
-                <circle cx={interceptorRobot.zone === "north" ? 670 : 670} cy={interceptorRobot.zone === "north" ? 186 : 332} r="18" fill="#1e3853" stroke="#d4e3f0" strokeWidth="2.5" />
+                <circle cx={interceptorRobot.zone === "north" ? 1320 : 1320} cy={interceptorRobot.zone === "north" ? 206 : 348} r="18" fill="#1e3853" stroke="#d4e3f0" strokeWidth="2.5" />
                 <line
-                  x1={interceptorRobot.zone === "north" ? 670 : 670}
-                  y1={interceptorRobot.zone === "north" ? 186 : 332}
+                  x1={interceptorRobot.zone === "north" ? 1320 : 1320}
+                  y1={interceptorRobot.zone === "north" ? 206 : 348}
                   x2={interceptorRobot.armX}
                   y2={interceptorRobot.armY}
                   stroke="#d0e1f0"
@@ -283,8 +305,8 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
                   strokeLinecap="round"
                 />
                 <line
-                  x1={interceptorRobot.zone === "north" ? 670 : 670}
-                  y1={interceptorRobot.zone === "north" ? 186 : 332}
+                  x1={interceptorRobot.zone === "north" ? 1320 : 1320}
+                  y1={interceptorRobot.zone === "north" ? 206 : 348}
                   x2={interceptorRobot.armX}
                   y2={interceptorRobot.armY}
                   stroke="#5d7896"
@@ -292,7 +314,7 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
                   strokeLinecap="round"
                 />
                 <circle cx={interceptorRobot.armX} cy={interceptorRobot.armY} r="12" fill="#7dd3c4" />
-                <text x={(interceptorRobot.zone === "north" ? 640 : 640)} y={interceptorRobot.zone === "north" ? 160 : 358} fill="#a8c6dd" fontSize="11">
+                <text x={(interceptorRobot.zone === "north" ? 1276 : 1276)} y={interceptorRobot.zone === "north" ? 176 : 380} fill="#a8c6dd" fontSize="11">
                   {interceptorRobot.label}
                 </text>
                 <text x={interceptorRobot.armX + 14} y={interceptorRobot.armY - 8} fill="#ffd166" fontSize="10">
@@ -363,8 +385,8 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
 
           {outboundPallets.map((pallet) => {
             const dock = outboundDocks.find((item) => item.id === pallet.dockId) ?? outboundDocks[0];
-            const startX = 992;
-            const startY = 376;
+            const startX = 1488;
+            const startY = 504;
             const targetX = dock.x + 8;
             const targetY = dock.y + 4;
             const x = startX + (targetX - startX) * pallet.progress;
@@ -385,10 +407,10 @@ export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, l
 
           <g>
             <text x="54" y="58" fill="#eff6fc" fontSize="30" fontWeight="700">
-              Rail, inspection, stacking, and outbound flow
+              Long trunk rail with three inbound sources and natural line splits
             </text>
             <text x="54" y="78" fill="#8cb4d6" fontSize="14">
-              Main infeed rail branches into interceptor zones, then verified cargo is staged before a slower palletizer place cycle.
+              Three source feeds merge into a long trunk rail, then branch across L1-L7 before QC hold and staged palletizing.
             </text>
           </g>
 
