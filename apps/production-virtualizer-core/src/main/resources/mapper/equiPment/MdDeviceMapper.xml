@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.scada.virtualizer.repository.mapper.equipment.MdDeviceMapper">
+
+    <select id="selectDeviceStatusList" parameterType="java.util.Map" resultType="com.scada.virtualizer.repository.dto.equipment.MdDeviceStatusDto">
+        SELECT
+            B.EQ_CODE,
+            B.DEVICE_CODE,
+            B.DEVICE_TYPE,
+            B.DEVICE_NAME,
+            A.DEVICE_STATUS_ADDR_CODE,
+            B.CFG_CODE,
+            '0' AS WORK_ID
+        FROM MD_DEVICE_STATUS_ADDR A
+        INNER JOIN MD_DEVICE B
+            ON A.CFG_CODE = B.CFG_CODE
+            AND A.EQ_CODE = B.EQ_CODE
+            AND A.DEVICE_CODE = B.DEVICE_CODE
+        WHERE B.CFG_CODE IN
+            <foreach collection="cfgCodeList" item="cfgCode" open="(" separator="," close=")">
+                #{cfgCode}
+            </foreach>
+        ORDER BY A.DEVICE_STATUS_ADDR_CODE
+    </select>
+
+    <select id="selectDeviceStatusListForMfc" resultType="com.scada.virtualizer.repository.dto.equipment.MdDeviceStatusDto">
+        select EQ_CODE,
+               DEVICE_CODE,
+               DEVICE_TYPE,
+               DEVICE_NAME,
+               ''  AS DEVICE_STATUS_ADDR_CODE,
+               CFG_CODE,
+               '0' AS WORK_ID
+        FROM MD_DEVICE
+        WHERE EQ_CODE = 'MFC'
+          AND REGEXP_LIKE(DEVICE_CODE, '.*[^0-9].*')
+    </select>
+
+</mapper>

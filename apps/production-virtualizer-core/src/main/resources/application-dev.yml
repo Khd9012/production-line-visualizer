@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: ${SCADA_DB_URL:jdbc:h2:file:./data/scada;MODE=LEGACY;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE}
+    driver-class-name: org.h2.Driver
+    username: ${SCADA_DB_USERNAME:sa}
+    password: ${SCADA_DB_PASSWORD:}
+    hikari:
+      minimum-idle: 1
+      maximum-pool-size: 10
+  sql:
+    init:
+      mode: always
+  h2:
+    console:
+      enabled: true
+
+server:
+  port: 8902
+
+logging:
+  config: classpath:log4j2.yml
+  level:
+    "[com.scada.virtualizer.ScadaVirtualizerApplication]": info
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+app:
+  scheduler:
+    auto-start: true

@@ -1,0 +1,10 @@
+services:
+  app:
+    build: .
+    ports:
+      - "8902:8902"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SCADA_DB_URL: jdbc:h2:file:/app/data/scada;MODE=LEGACY;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    volumes:
+      - ./data:/app/data

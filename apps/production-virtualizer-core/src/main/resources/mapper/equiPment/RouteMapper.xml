@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.scada.virtualizer.repository.mapper.equipment.RouteMapper">
+
+
+    <select id="getEqRouteOrderByCmdId" parameterType="java.util.Map" resultType="com.scada.virtualizer.repository.dto.equipment.EqRouteOrder">
+        SELECT * FROM EQ_ROUTE_ORDER WHERE CMD_ID = #{cmdId}
+    </select>
+
+    <update id="setEqRouteOrderStatusByCmdId" parameterType="java.util.Map">
+        UPDATE EQ_ROUTE_ORDER SET
+            CMD_STATUS = #{cmdStatus}
+            ,CMD_STATUS_DESC = #{cmdStatusDesc}
+            <choose><when test="cEqCode != null">
+                ,C_EQ_CODE = #{cEqCode}
+                ,C_DEVICE_CODE = #{cDeviceCode}
+            </when></choose>
+            <choose><when test="statusCode != null">
+                ,STATUS_CODE = #{statusCode}
+                ,STATUS_DESC = #{statusDesc}
+            </when></choose>
+            ,UPDATE_DATE = CURRENT_TIMESTAMP
+            <choose><when test="closeYn != null">
+                ,CLOSE_YN = #{closeYn}
+                ,CLOSE_DATE = CURRENT_TIMESTAMP
+            </when></choose>
+        WHERE EQ_CODE = #{eqCode}
+        AND CMD_ID = #{cmdId}
+    </update>
+
+
+    <select id="getEqRouteListByCmdStatusList" parameterType="java.util.Map" resultType="com.scada.virtualizer.repository.dto.equipment.EqRouteOrderAddLboxInfo">
+        SELECT H.*,P.ORDER_NO,P.PLT_NO
+        FROM (SELECT CASE WHEN B.DEVICE_CODE IS NOT NULL THEN 0 ELSE 1 END AS PLACE_POINT,
+                     A.*
+              FROM EQ_ROUTE_ORDER A
+                LEFT OUTER JOIN MD_DEVICE_PLACE B
+              ON A.F_EQ_CODE = B.EQ_CODE AND A.F_DEVICE_CODE = B.DEVICE_CODE AND B.MOTION_TYPE = '1'
+              WHERE A.EQ_CODE = #{eqCode}
+                AND CMD_STATUS  IN
+                <foreach collection="cmdStatusList" item="item" index="index" separator="," open="(" close=")">
+                    #{item}
+                </foreach>
+                AND CLOSE_YN = 'N') H
+        JOIN DB_ORDER_PALLET_PART_INFO P
+        ON RIGHT(H.BARCODE,4) = P.CASE_NO
+        ORDER BY PLACE_POINT ASC, F_DEVICE_CODE DESC
+    </select>
+</mapper>

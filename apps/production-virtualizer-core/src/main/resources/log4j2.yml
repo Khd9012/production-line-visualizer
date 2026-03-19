@@ -1,0 +1,56 @@
+Configutation:
+  name: Default
+  status: info
+
+  Properties:
+    Property:
+      - name: log-path
+        value: ./logs
+      - name: archive
+        value: ${log-path}/archive
+      - name: console-pattern
+        value: "%d{${LOG_DATEFORMAT_PATTERN:-yyyy-MM-dd HH:mm:ss.SSS}} %highlight{${LOG_LEVEL_PATTERN:-%5p}}{FATAL=red blink, ERROR=red, WARN=yellow bold, INFO=green, DEBUG=green bold, TRACE=blue} %style{${sys:PID}}{magenta} [%15.15t] %style{%-36.36C{1.}{:%L}}{cyan} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"
+      - name: console-pattern-a
+        value: "%d{yyyy-MM-dd HH:mm:ss.SSS} %highlight{%-5level} [%style{%20.20t}{bright,blue}] %style{%36.36C{1.}}{bright,yellow} : %m%n%ex"
+      - name: file-pattern
+        value: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%20.20t] %36.36C{1.} : %m%n%ex"
+
+  Appenders:
+    Console:
+      name: consoleAppender
+      target: SYSTEM_OUT
+      PatternLayout:
+        disableAnsi: false
+        pattern: ${console-pattern-a}
+    RollingFile:
+      - name: rollingFileAppender
+        fileName: ${log-path}/application.log
+        filePattern: ${archive}/application.log.%d{yyyy-MM-dd}-%i.log
+        PatternLayout:
+          charset: EUC-KR
+          pattern: ${file-pattern}
+        Policies:
+          SizeBasedTriggeringPolicy:
+            size: 100 MB
+          TimeBasedTriggeringPolicy:
+            interval: 1
+        DefaultRollOverStrategy:
+          max: 30
+          Delete:
+            basePath: ${log-path}/archive
+            maxDepth: 1
+            IfFileName:
+              glob: application.*.*.log
+            IfLastModified:
+              age: 30d
+  Loggers:
+    Root:
+      level: info
+      AppenderRef:
+        - ref: consoleAppender
+        - ref: rollingFileAppender
+
+    Logger:
+      name: com.scada.virtualizer.repository.mapper
+      level: info
+        

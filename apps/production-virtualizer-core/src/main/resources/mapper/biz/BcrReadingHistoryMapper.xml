@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.scada.virtualizer.repository.mapper.equipment.BcrReadingHistoryMapper">
+
+    <insert id="insertBcrReadingHistory" parameterType="com.scada.virtualizer.repository.dto.equipment.MdBcrReadingHistory">
+        INSERT INTO MD_BCR_READING_HISTORY (
+                DEVICE_AREA_CODE,
+                BARCODE,
+                WORK_ID
+        )
+        SELECT
+            #{deviceAreaCode},
+            #{barcode},
+            #{workId}
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM MD_BCR_READING_HISTORY
+            WHERE DEVICE_AREA_CODE = #{deviceAreaCode}
+            AND BARCODE = #{barcode}
+            AND WORK_ID = #{workId}
+        )
+    </insert>
+
+    <select id="selectRecentBcrHistory" parameterType="map" resultType="com.scada.virtualizer.repository.dto.equipment.DeviceBarcodeHistoryDto">
+        SELECT
+            A.DEVICE_CODE,
+            A.DEVICE_NAME,
+            A.DEVICE_TYPE,
+            B.BARCODE,
+            B.WORK_ID,
+            B.CREATE_DATE
+        FROM MD_DEVICE A
+        JOIN MD_BCR_READING_HISTORY B
+            ON A.DEVICE_AREA_CODE = B.DEVICE_AREA_CODE
+        WHERE A.DEVICE_TYPE = 'BCR'
+            AND A.DEVICE_CODE = #{deviceCode}
+        ORDER BY B.CREATE_DATE DESC
+        LIMIT #{limit}
+    </select>
+</mapper>

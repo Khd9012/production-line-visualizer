@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.scada.virtualizer.repository.mapper.biz.ScadaManualOrderMapper">
+
+    <insert id="insertManualOrder" parameterType="com.scada.virtualizer.repository.dto.biz.ManualOrderDto">
+        INSERT INTO EQ_MANUAL_ORDER
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            TARGET_CODE,
+            CMD_ID,
+            JOB_TYPE,
+            CMD_STATUS,
+            CMD_STATUS_DESC,
+            DEVICE_CODE,
+            <if test="data1 != null and data1 != ''">DATA1,</if>
+            <if test="data2 != null and data2 != ''">DATA2,</if>
+            <if test="data3 != null and data3 != ''">DATA3,</if>
+            <if test="data4 != null and data4 != ''">DATA4,</if>
+            <if test="data5 != null and data5 != ''">DATA5,</if>
+            <if test="data6 != null and data6 != ''">DATA6,</if>
+            <if test="data7 != null and data7 != ''">DATA7,</if>
+            <if test="data8 != null and data8 != ''">DATA8,</if>
+            <if test="data9 != null and data9 != ''">DATA9,</if>
+            <if test="data10 != null and data10 != ''">DATA10,</if>
+            CREATE_DATE,
+            CREATOR
+        </trim>
+        <trim prefix="VALUES (" suffix=")" suffixOverrides=",">
+            #{targetCode},
+            CONCAT(FORMATDATETIME(CURRENT_TIMESTAMP, 'yyyyMMddHHmmss'), RIGHT(CONCAT('00', CAST(NEXT VALUE FOR SEQ_CMD_ID AS VARCHAR)), 2)),
+            #{jobType},
+            #{cmdStatus},
+            #{cmdStatusDesc},
+            #{deviceCode},
+            <if test="data1 != null and data1 != ''">#{data1},</if>
+            <if test="data2 != null and data2 != ''">#{data2},</if>
+            <if test="data3 != null and data3 != ''">#{data3},</if>
+            <if test="data4 != null and data4 != ''">#{data4},</if>
+            <if test="data5 != null and data5 != ''">#{data5},</if>
+            <if test="data6 != null and data6 != ''">#{data6},</if>
+            <if test="data7 != null and data7 != ''">#{data7},</if>
+            <if test="data8 != null and data8 != ''">#{data8},</if>
+            <if test="data9 != null and data9 != ''">#{data9},</if>
+            <if test="data10 != null and data10 != ''">#{data10},</if>
+            CURRENT_TIMESTAMP,
+            'WCS'
+        </trim>
+    </insert>
+
+    <select id="selectManualOrderList" parameterType="java.util.Map" resultType="com.scada.virtualizer.repository.dto.biz.ManualOrderDto">
+        select
+            *
+        FROM EQ_MANUAL_ORDER
+        WHERE TARGET_CODE = #{targetCode}
+          AND JOB_TYPE = #{jobType}
+          AND CMD_STATUS = #{cmdStatus}
+          AND DEVICE_CODE = #{deviceCode}
+          <if test="data2 != null and data2 !=''">
+              AND DATA2 = #{data2}
+          </if>
+    </select>
+</mapper>

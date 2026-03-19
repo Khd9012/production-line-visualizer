@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>STOMP WebSocket Test</title>
+</head>
+<body>
+  <h1>STOMP WebSocket Client</h1>
+  <button id="connectBtn">Connect</button>
+  <button id="disconnectBtn">Disconnect</button>
+  <div>
+    <h3>Messages:</h3>
+    <pre id="messages"></pre>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+  <script>
+    let client;
+
+    document.getElementById('connectBtn').addEventListener('click', () => {
+      client = new StompJs.Client({
+        brokerURL: 'ws://localhost:8902/ws-stomp', // 서버 WebSocket 엔드포인트 맞춰 수정
+        reconnectDelay: 5000,
+        onConnect: () => {
+          log('Connected to STOMP server');
+          client.subscribe('/topic/eqStatusAll', (message) => {
+            log(`Received: ${message.body}`);
+          });
+        },
+        onStompError: (frame) => {
+          log(`Broker error: ${frame.headers['message']}`);
+        }
+      });
+      client.activate();
+    });
+
+    document.getElementById('disconnectBtn').addEventListener('click', () => {
+      if (client) {
+        client.deactivate();
+        log('Disconnected');
+      }
+    });
+
+    function log(message) {
+      const messages = document.getElementById('messages');
+      messages.textContent += `${message}\n`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.scada.virtualizer.repository.mapper.equipment.MdDeviceCtrlMapper">
+
+    <!-- get interface info for device controller -->
+    <select id="getMdDeviceCtrlOfCfgCode" parameterType="java.util.Map" resultType="com.scada.virtualizer.repository.dto.equipment.MdDeviceCtrl">
+        SELECT * FROM MD_DEVICE_CTRL WHERE CFG_CODE LIKE CONCAT('%', #{cfgCode}, '%')
+    </select>
+
+    <select id="getMdDeviceCtrlOfCfgModel" parameterType="java.util.Map" resultType="com.scada.virtualizer.repository.dto.equipment.MdDeviceCtrl">
+        SELECT * FROM MD_DEVICE_CTRL WHERE CFG_MODEL = #{cfgModel} AND USE_YN = 'Y'
+    </select>
+
+    <select id="getMdDeviceCtrlOfEqCode" parameterType="java.util.Map" resultType="com.scada.virtualizer.repository.dto.equipment.MdDeviceCtrl">
+        SELECT * FROM MD_DEVICE_CTRL A
+        WHERE EXISTS(
+            SELECT * FROM MD_DEVICE X
+            WHERE X.EQ_CODE LIKE  CONCAT('%', #{eqCode}, '%')
+            AND X.DEVICE_TYPE = #{deviceType}
+            AND X.CFG_CODE = A.CFG_CODE
+        )
+        AND USE_YN = 'Y'
+    </select>
+
+    
+    <select id="getMdDeviceCtrlOp" parameterType="java.util.Map" resultType="com.scada.virtualizer.repository.dto.equipment.MdDeviceCtrl">
+        SELECT * FROM MD_DEVICE_CTRL X
+        WHERE EXISTS (
+            SELECT * FROM MD_DEVICE A
+            INNER JOIN MD_EQ B ON A.EQ_CODE = B.EQ_CODE
+            WHERE A.EQ_CODE = #{eqCode}
+            AND X.CFG_CODE = A.CFG_CODE
+        )
+        AND USE_YN = 'Y'
+        ORDER BY CFG_CODE
+    </select>
+
+    <update id="setMdDeviceCtrlStatus" parameterType="java.util.Map">
+        UPDATE MD_DEVICE_CTRL SET
+            STATUS_CODE = #{statusCode},
+            STATUS_DESC  = #{statusDesc}
+        WHERE CFG_CODE = #{cfgCode}
+    </update>
+
+</mapper>

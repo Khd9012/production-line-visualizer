@@ -1,0 +1,78 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.5.3'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.scada'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+    all {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // thymeleaf
+ 	implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
+
+ 	//web
+ 	implementation 'org.springframework.boot:spring-boot-starter-web'
+
+ 	// WebFlux (WebClient 등 사용)
+ 	implementation 'org.springframework:spring-webflux'
+
+    //devtools
+  	developmentOnly 'org.springframework.boot:spring-boot-devtools'
+  	testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    // log4j2 spring boot 연동
+    implementation 'org.springframework.boot:spring-boot-starter-log4j2'
+
+    // lombok
+    compileOnly 'org.projectlombok:lombok:1.18.30'
+    annotationProcessor 'org.projectlombok:lombok:1.18.30'
+
+
+    // log4j2 - yaml 설정 지원
+    implementation 'com.fasterxml.jackson.dataformat:jackson-dataformat-yaml'
+
+    // jdbc
+    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+
+    // embedded database
+    runtimeOnly 'com.h2database:h2'
+
+    // mybatis
+    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+
+    // gson
+    implementation 'com.google.code.gson:gson:2.8.7'
+
+    // openapi
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.5.0'
+
+    // 서버 모니터링
+    implementation 'com.github.oshi:oshi-core:6.4.7'
+    
+    // 소켓 추가
+    implementation 'org.springframework.boot:spring-boot-starter-websocket'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

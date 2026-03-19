@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.scada.virtualizer.repository.mapper.biz.ScadaPalletInfoMapper">
+    <resultMap id="PalletPartInfoMap" type="com.scada.virtualizer.repository.dto.biz.ScadaPalletPartInfoDto">
+        <id property="masterKey" column="MASTER_KEY"/>
+        <result property="masterSeq" column="MASTER_SEQ"/>
+        <result property="orderNo" column="ORDER_NO"/>
+        <result property="ptnGroup" column="PTN_GROUP"/>
+        <result property="pltNo" column="PLT_NO"/>
+        <result property="boxOrderQty" column="BOX_ORDER_QTY"/>
+        <result property="boxRoboQty" column="BOX_ROBO_QTY"/>
+        <result property="remarks" column="REMARKS"/>
+        <result property="caseNo" column="CASE_NO"/>
+        <result property="roboNo" column="ROBO_NO"/>
+        <result property="roboLine" column="ROBO_LINE"/>
+
+        <collection property="boxInfoList" ofType="com.scada.virtualizer.repository.dto.biz.ScadaPalletBoxInfoDto">
+            <result property="lnIputNo" column="LN_IPUT_NO"/>
+            <result property="ptnGroup" column="PTN_GROUP"/>
+            <result property="partNo" column="PART_NO"/>
+            <result property="barcode" column="BARCODE"/>
+            <result property="completeYn" column="COMPLETE_YN"/>
+        </collection>
+    </resultMap>
+
+    <select id="selectPalletPartInfoWithBox" parameterType="map" resultMap="PalletPartInfoMap">
+           SELECT
+               B.MASTER_KEY,
+               B.MASTER_SEQ,
+               B.ORDER_NO,
+               B.PTN_GROUP,
+               B.PLT_NO,
+               B.BOX_ORDER_QTY,
+               B.BOX_ROBO_QTY,
+               B.REMARKS,
+               B.CASE_NO,
+               B.ROBO_NO,
+               B.ROBO_LINE,
+               C.LN_IPUT_NO,
+               C.PTN_GROUP,
+               C.PART_NO,
+               C.BARCODE,
+               CASE
+                   WHEN C.WORK_ID IS NULL THEN 'N'
+                   ELSE 'Y'
+               END AS COMPLETE_YN
+            FROM
+            (
+                SELECT
+           		    MASTER_KEY,	MASTER_SEQ,	ORDER_NO,
+           		    PTN_GROUP,	PLT_NO,REMARKS,
+                       CASE_NO, SUM(BOX_ORDER_QTY) as BOX_ORDER_QTY, SUM(BOX_ROBO_QTY) as BOX_ROBO_QTY
+   					,ROBO_NO,ROBO_LINE
+                   FROM DB_ORDER_PALLET_PART_INFO
+   				WHERE REMARKS IS NOT NULL
+                   GROUP BY MASTER_KEY,MASTER_SEQ,ORDER_NO
+                          ,PTN_GROUP,PLT_NO,REMARKS,CASE_NO,ROBO_NO,ROBO_LINE
+        		) B
+           LEFT JOIN (
+               SELECT
+                   F.MASTER_KEY, F.MASTER_SEQ, F.ORDER_NO, F.PLT_NO,
+                   F.LN_IPUT_NO, F.PTN_GROUP, F.PART_NO, F.TICKET_BCD AS BARCODE,
+                   D.WORK_ID
+               FROM DB_ORDER_PALLET_BOX_INFO F
+               LEFT JOIN EQ_PLACE_ORDER D
+                   ON D.BARCODE = F.TICKET_BCD
+                  AND D.CMD_STATUS = '4'
+           ) C
+               ON C.MASTER_KEY = B.MASTER_KEY
+              AND C.MASTER_SEQ = B.MASTER_SEQ
+              AND C.ORDER_NO = B.ORDER_NO
+              AND C.PLT_NO = B.PLT_NO
+           WHERE B.MASTER_KEY = #{masterKey}
+            AND B.MASTER_SEQ = #{masterSeq}
+                     AND B.ORDER_NO = #{orderNo}
+                     AND B.PLT_NO = #{pltNo}
+    </select>
+
+    <select id="selectPalletPartInfoWithRecipe" parameterType="map" resultMap="PalletPartInfoMap">
+        SELECT A.MASTER_KEY,
+               A.MASTER_SEQ,
+               A.ORDER_NO,
+               A.PTN_GROUP,
+               A.PLT_NO,
+               A.BOX_ORDER_QTY,
+               A.BOX_ROBO_QTY,
+               A.REMARKS,
+               A.CASE_NO,
+               A.ROBO_NO,
+               A.ROBO_LINE,
+               C.LN_IPUT_NO,
+               C.PTN_GROUP,
+               C.PART_NO,
+               C.TICKET_BCD AS BARCODE,
+               CASE
+                   WHEN B.CMD_STATUS !='4' THEN 'N'
+                   ELSE 'Y'
+                   END      AS COMPLETE_YN
+        FROM (SELECT *
+              FROM DB_ORDER_PALLET_PART_INFO
+              WHERE MASTER_KEY = #{masterKey}
+                AND MASTER_SEQ = #{masterSeq}
+                AND ORDER_NO = #{orderNo}
+                AND PLT_NO = #{pltNo}) A
+                 JOIN EQ_APM_PLACE_ORDER B
+                      ON A.MASTER_KEY = B.MASTER_KEY
+                          AND A.MASTER_SEQ = B.MASTER_SEQ
+                          AND A.ORDER_NO = B.ORDER_NO
+                          AND A.PLT_NO = B.PLT_NO
+                          AND B.ORDER_TYPE = 'RECIPE'
+        	  JOIN DB_ORDER_PALLET_BOX_INFO C
+        ON CONCAT(',', B.RECIPE_SERIAL, ',') LIKE CONCAT('%,', C.SERIAL_NO, ',%')
+    </select>
+
+    <resultMap id="PalletPartInfoProcessWorkMap" type="com.scada.virtualizer.repository.dto.biz.ScadaPalletPartInfoDto">
+            <id property="masterKey" column="MASTER_KEY"/>
+            <result property="masterSeq" column="MASTER_SEQ"/>
+            <result property="orderNo" column="ORDER_NO"/>
+            <result property="ptnGroup" column="PTN_GROUP"/>
+            <result property="pltNo" column="PLT_NO"/>
+            <result property="boxOrderQty" column="BOX_ORDER_QTY"/>
+            <result property="boxRoboQty" column="BOX_ROBO_QTY"/>
+            <result property="remarks" column="REMARKS"/>
+            <result property="caseNo" column="CASE_NO"/>
+            <result property="roboNo" column="ROBO_NO"/>
+            <result property="roboLine" column="ROBO_LINE"/>
+
+            <collection property="boxInfoList" ofType="com.scada.virtualizer.repository.dto.biz.ScadaPalletBoxInfoDto">
+                <result property="lnIputNo" column="LN_IPUT_NO"/>
+                <result property="ptnGroup" column="PTN_GROUP"/>
+                <result property="partNo" column="PART_NO"/>
+                <result property="barcode" column="BARCODE"/>
+                <result property="completeYn" column="COMPLETE_YN"/>
+            </collection>
+        </resultMap>
+
+
+    <select id="selectRobotProcessWorkList" resultMap="PalletPartInfoProcessWorkMap">
+        SELECt B.MASTER_KEY,
+               B.MASTER_SEQ,
+               B.ORDER_NO,
+               B.PTN_GROUP,
+               B.PLT_NO,
+               B.BOX_ORDER_QTY,
+               B.BOX_ROBO_QTY,
+               B.REMARKS,
+               B.CASE_NO,
+               A.ROBO_NO,
+               A.ROBO_LINE,
+               C.LN_IPUT_NO,
+               C.PTN_GROUP,
+               C.PART_NO,
+               C.BARCODE,
+               CASE
+                   WHEN C.WORK_ID IS NULL THEN 'N'
+                   ELSE 'Y'
+                   END AS COMPLETE_YN
+        FROM DB_ROBO_DATA_INFO A
+                 JOIN (select MASTER_KEY,
+                              MASTER_SEQ,
+                              ORDER_NO,
+                              PTN_GROUP,
+                              PLT_NO,
+                              REMARKS,
+                              CASE_NO,
+                              SUM(BOX_ORDER_QTY) as BOX_ORDER_QTY,
+                              SUM(BOX_ROBO_QTY)  as BOX_ROBO_QTY
+                       FROM DB_ORDER_PALLET_PART_INFO
+                       GROUP BY MASTER_KEY, MASTER_SEQ, ORDER_NO, PTN_GROUP, PLT_NO, REMARKS,
+                                CASE_NO) B ON A.MASTER_KEY = B.MASTER_KEY
+            AND A.MASTER_SEQ = B.MASTER_SEQ
+            AND A.ORDER_NO = B.ORDER_NO
+            AND A.PLT_NO = B.PLT_NO
+                 LEFT JOIN (SELECT F.MASTER_KEY,
+                                   F.MASTER_SEQ,
+                                   F.ORDER_NO,
+                                   F.PLT_NO,
+                                   F.LN_IPUT_NO,
+                                   F.PTN_GROUP,
+                                   F.PART_NO,
+                                   F.TICKET_BCD AS BARCODE,
+                                   D.WORK_ID
+                            FROM DB_ORDER_PALLET_BOX_INFO F
+                                     LEFT JOIN EQ_PLACE_ORDER D
+                                               ON D.BARCODE = F.TICKET_BCD
+                                                   AND D.CMD_STATUS = '4') C
+                           ON C.MASTER_KEY = B.MASTER_KEY
+                               AND C.MASTER_SEQ = B.MASTER_SEQ
+                               AND C.ORDER_NO = B.ORDER_NO
+                               AND C.PLT_NO = B.PLT_NO
+                WHERE 3 > A.ROBO_NO
+    </select>
+
+    <select id="selectAssignedRobotInfo" parameterType="map" resultType="com.scada.virtualizer.repository.dto.biz.RobotOrderDto">
+        SELECT ROBO_NO,ROBO_LINE,MASTER_KEY,MASTER_SEQ,ORDER_NO,PLT_NO
+         FROM DB_ROBO_DATA_INFO WHERE ROBO_NO = #{roboNo} AND ROBO_LINE = #{roboLine}
+    </select>
+
+    <insert id="insertEqPlaceOrderPalletComplete" parameterType="map">
+        INSERT INTO EQ_PLACE_ORDER (
+            WORK_ID,
+            CMD_STATUS,
+            CMD_STATUS_DESC,
+            BARCODE,
+            M_BOX_CD,
+            DEVICE_CODE,
+            CREATE_DATE
+        )
+        SELECT
+            'FFFF',                     -- WORK_ID
+            '4',                        -- CMD_STATUS
+            N'WCS 완료처리',            -- CMD_STATUS_DESC
+            A.TICKET_BCD,               -- BARCODE
+            C.M_BOX_CD,                 -- M_BOX_CD
+            #{deviceCode},                    -- DEVICE_CODE
+            CURRENT_TIMESTAMP           -- CREATE_DATE
+        FROM DB_ORDER_PALLET_BOX_INFO A
+        LEFT JOIN EQ_PLACE_ORDER B ON A.TICKET_BCD = B.BARCODE
+        JOIN DB_ORDER_PALLET_PART_INFO C
+            ON C.MASTER_KEY = A.MASTER_KEY
+            AND C.MASTER_SEQ = A.MASTER_SEQ
+            AND C.ORDER_NO = A.ORDER_NO
+            AND C.PLT_NO = A.PLT_NO
+        WHERE B.BARCODE IS NULL
+          AND A.MASTER_KEY = #{masterKey}
+          AND A.MASTER_SEQ = #{masterSeq}
+          AND A.ORDER_NO = #{orderNo}
+          AND A.PLT_NO = #{pltNo}
+    </insert>
+
+    <update id="updatePalletPartComplete" parameterType="map">
+        UPDATE DB_ORDER_PALLET_PART_INFO
+        SET BOX_ROBO_QTY = BOX_ORDER_QTY
+        WHERE MASTER_KEY = #{masterKey}
+          AND MASTER_SEQ = #{masterSeq}
+          AND ORDER_NO = #{orderNo}
+          AND PLT_NO = #{pltNo}
+    </update>
+
+    <resultMap id="PtnGroupModDtoMap" type="com.scada.virtualizer.repository.dto.biz.PtnGroupModDto">
+        <result column="WORK_ID" property="workId"/>
+        <result column="PTN_GROUP" property="ptnGroup"/>
+        <result column="MASTER_KEY" property="masterKey"/>
+        <result column="MASTER_SEQ" property="masterSeq"/>
+        <result column="ORDER_NO" property="orderNo"/>
+        <result column="PLT_NO" property="pltNo"/>
+        <result column="MOD_DTM" property="modDtm"/>
+    </resultMap>
+
+    <select id="selectPalletTypeInfoByStep" parameterType="map" resultMap="PtnGroupModDtoMap">
+        SELECT *
+        FROM (
+            SELECT
+                A.WORK_ID,
+                A.PTN_GROUP,
+        		A.MASTER_KEY,
+        		A.MASTER_SEQ,
+        		A.ORDER_NO,
+        		A.PLT_NO,
+                PARSEDATETIME(
+                    CONCAT(
+                        SUBSTRING(CMD_ID, 1, 4), '-',
+                        SUBSTRING(CMD_ID, 5, 2), '-',
+                        SUBSTRING(CMD_ID, 7, 2), ' ',
+                        SUBSTRING(CMD_ID, 9, 2), ':',
+                        SUBSTRING(CMD_ID, 11, 2), ':',
+                        SUBSTRING(CMD_ID, 13, 2)
+                    ),
+                    'yyyy-MM-dd HH:mm:ss'
+                ) AS MOD_DTM
+            FROM EQ_APM_PLACE_ORDER A
+            JOIN DB_ORDER_PALLET_PART_INFO B
+                ON A.MASTER_KEY = B.MASTER_KEY
+               AND A.MASTER_SEQ = B.MASTER_SEQ
+               AND A.ORDER_NO = B.ORDER_NO
+               AND A.PLT_NO = B.PLT_NO
+            WHERE A.WORK_ID = #{workId} AND A.ORDER_TYPE = 'PALLET'
+
+            UNION ALL
+
+            SELECT
+                A.WORK_ID,
+                A.PTN_GROUP,
+        		A.MASTER_KEY,
+        		A.MASTER_SEQ,
+        		A.ORDER_NO,
+        		A.PLT_NO,
+                A.MOD_DTM
+            FROM DB_PALLET_LABEL_BUFFER A
+            JOIN DB_ORDER_PALLET_PART_INFO B
+                ON A.MASTER_KEY = B.MASTER_KEY
+               AND A.MASTER_SEQ = B.MASTER_SEQ
+               AND A.ORDER_NO = B.ORDER_NO
+               AND A.PLT_NO = B.PLT_NO
+            WHERE A.WORK_ID = #{workId}
+        ) AS Combined
+        ORDER BY MOD_DTM DESC
+        LIMIT 1
+    </select>
+</mapper>

@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.scada.virtualizer.repository.mapper.biz.MdDeviceErrorNotiMapper">
+
+    <insert id="insertDeviceErrorNotification" parameterType="com.scada.virtualizer.repository.dto.biz.MdDeviceErrorNotiDto">
+        INSERT INTO MD_DEVICE_ERROR_NOTI (
+                EQ_CODE,
+                DEVICE_CODE,
+                DEVICE_TYPE,
+                DEVICE_NAME,
+                ERROR_CODE,
+                ERROR_DESC
+            )
+            SELECT
+                #{eqCode},
+                #{deviceCode},
+                #{deviceType},
+                #{deviceName},
+                #{errorCode},
+                #{errorDesc}
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM MD_DEVICE_ERROR_NOTI
+                WHERE DEVICE_CODE = #{deviceCode}
+                  AND CLEAR_YN = 'N'
+            )
+    </insert>
+
+    <update id="updateDeviceErrorClear" parameterType="map">
+        UPDATE MD_DEVICE_ERROR_NOTI
+        SET
+            CLEAR_YN = 'Y',
+            UPDATE_DATE = CURRENT_TIMESTAMP
+        WHERE
+            EQ_CODE = #{eqCode}
+            AND DEVICE_CODE = #{deviceCode}
+            AND CLEAR_YN = 'N'
+    </update>
+
+    <select id="selectAllUnclearedErrors" parameterType="string" resultType="com.scada.virtualizer.repository.dto.biz.MdDeviceErrorNotiDto">
+        SELECT
+            SEQ,
+            EQ_CODE,
+            DEVICE_CODE,
+            DEVICE_TYPE,
+            DEVICE_NAME,
+            ERROR_CODE,
+            ERROR_DESC,
+            CLEAR_YN,
+            CREATE_DATE AS CREATE_DT,
+            UPDATE_DATE AS UPDATE_DT
+        FROM MD_DEVICE_ERROR_NOTI
+        WHERE CLEAR_YN = #{clearYn}
+        ORDER BY SEQ DESC
+    </select>
+
+    <select id="selectMdDeviceErrorCodeInfoList" resultType="com.scada.virtualizer.repository.dto.biz.MdDeviceErrorCodeInfoDto">
+        SELECT CFG_CODE_TYPE,
+               ERROR_CODE,
+               DEVICE_TYPE,
+               ERROR_DESC,
+               ERROR_LEVEL,
+               NOTE
+        FROM MD_DEVICE_ERROR_CODE_INFO
+    </select>
+</mapper>
