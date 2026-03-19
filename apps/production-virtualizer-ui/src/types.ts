@@ -4,6 +4,8 @@ export type CargoRailPhase = "mainline" | "branching" | "interceptor" | "inspect
 export type FocusLine = "ALL" | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "QC";
 
 export type PlaybackSpeed = 0.5 | 1 | 1.5 | 2;
+export type MainRobotPhase = "standby" | "rotate" | "lower" | "suction" | "lift" | "transfer" | "place";
+export type InterceptorRobotPhase = "idle" | "align" | "pick" | "transfer" | "release";
 
 export type RailSegment = {
   id: string;
@@ -68,6 +70,30 @@ export type RobotState = {
   armY: number;
   activeCargoId?: string;
   cycleProgress: number;
+  phase?: MainRobotPhase;
+  pickX?: number;
+  pickY?: number;
+};
+
+export type InterceptorRobotState = {
+  id: string;
+  label: string;
+  zone: "north" | "south";
+  armX: number;
+  armY: number;
+  phase: InterceptorRobotPhase;
+  cycleProgress: number;
+  activeCargoId?: string;
+  lineGroup: string;
+};
+
+export type OutboundPallet = {
+  id: string;
+  boxCount: number;
+  releasedAt: string;
+  progress: number;
+  dockId: string;
+  status: "staging" | "moving" | "shipped";
 };
 
 export type CoreDeviceStatus = {

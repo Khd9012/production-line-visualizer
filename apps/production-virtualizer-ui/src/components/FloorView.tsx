@@ -1,9 +1,11 @@
 import { focusViewBoxes, lineBranchMap, mainRailPath, outboundDocks, palletCellAnchors, pickupAnchor, processZones, trackNodes } from "../data/layout";
-import type { Cargo, FocusLine, PalletLayer, PlaybackSpeed, RobotState } from "../types";
+import type { Cargo, FocusLine, InterceptorRobotState, OutboundPallet, PalletLayer, PlaybackSpeed, RobotState } from "../types";
 
 type FloorViewProps = {
   cargos: Cargo[];
   robot: RobotState;
+  interceptorRobots: InterceptorRobotState[];
+  outboundPallets: OutboundPallet[];
   layers: PalletLayer[];
   focusedLine: FocusLine;
   playbackSpeed: PlaybackSpeed;
@@ -54,7 +56,7 @@ const getNextTargetCell = (layers: PalletLayer[]) => {
 const isLineVisible = (line: string, focusedLine: FocusLine) => focusedLine === "ALL" || focusedLine === line;
 const mainRailPathD = `M ${mainRailPath.map((point) => `${point.x} ${point.y}`).join(" L ")}`;
 
-export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }: FloorViewProps) {
+export function FloorView({ cargos, robot, interceptorRobots, outboundPallets, layers, focusedLine, playbackSpeed }: FloorViewProps) {
   const nextTargetCell = getNextTargetCell(layers);
   const activeCargo = cargos.find((cargo) => cargo.id === robot.activeCargoId) ?? cargos.find((cargo) => cargo.state === "picked");
   const transitionDuration = `${Math.max(0.2, 1.15 / playbackSpeed)}s`;
@@ -262,6 +264,42 @@ export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }:
             </text>
             <circle cx={robot.armX} cy={robot.armY} r="18" fill="#f25f5c" style={{ transitionDuration }} />
             <circle cx={robot.armX} cy={robot.armY} r="7" fill="#ffe9d0" style={{ transitionDuration }} />
+            <text x="1032" y="150" fill="#f0f5fa" fontSize="12">
+              {robot.phase ?? robot.mode}
+            </text>
+          </g>
+
+          <g>
+            {interceptorRobots.map((interceptorRobot) => (
+              <g key={interceptorRobot.id}>
+                <circle cx={interceptorRobot.zone === "north" ? 670 : 670} cy={interceptorRobot.zone === "north" ? 186 : 332} r="18" fill="#1e3853" stroke="#d4e3f0" strokeWidth="2.5" />
+                <line
+                  x1={interceptorRobot.zone === "north" ? 670 : 670}
+                  y1={interceptorRobot.zone === "north" ? 186 : 332}
+                  x2={interceptorRobot.armX}
+                  y2={interceptorRobot.armY}
+                  stroke="#d0e1f0"
+                  strokeWidth="8"
+                  strokeLinecap="round"
+                />
+                <line
+                  x1={interceptorRobot.zone === "north" ? 670 : 670}
+                  y1={interceptorRobot.zone === "north" ? 186 : 332}
+                  x2={interceptorRobot.armX}
+                  y2={interceptorRobot.armY}
+                  stroke="#5d7896"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
+                <circle cx={interceptorRobot.armX} cy={interceptorRobot.armY} r="12" fill="#7dd3c4" />
+                <text x={(interceptorRobot.zone === "north" ? 640 : 640)} y={interceptorRobot.zone === "north" ? 160 : 358} fill="#a8c6dd" fontSize="11">
+                  {interceptorRobot.label}
+                </text>
+                <text x={interceptorRobot.armX + 14} y={interceptorRobot.armY - 8} fill="#ffd166" fontSize="10">
+                  {interceptorRobot.phase}
+                </text>
+              </g>
+            ))}
           </g>
 
           {cargos.map((cargo) => {
@@ -322,6 +360,28 @@ export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }:
               </text>
             </g>
           ))}
+
+          {outboundPallets.map((pallet) => {
+            const dock = outboundDocks.find((item) => item.id === pallet.dockId) ?? outboundDocks[0];
+            const startX = 992;
+            const startY = 376;
+            const targetX = dock.x + 8;
+            const targetY = dock.y + 4;
+            const x = startX + (targetX - startX) * pallet.progress;
+            const y = startY + (targetY - startY) * pallet.progress;
+
+            return (
+              <g key={pallet.id} opacity={pallet.status === "shipped" ? 0.35 : 1}>
+                <rect x={x} y={y} width="38" height="28" rx="6" fill="#ffb84d" stroke="#fff1cf" strokeWidth="2" />
+                <text x={x + 19} y={y + 18} fill="#08111c" fontSize="10" fontWeight="700" textAnchor="middle">
+                  OUT
+                </text>
+                <text x={x + 19} y={y - 8} fill="#f5d6c9" fontSize="10" textAnchor="middle">
+                  {pallet.id}
+                </text>
+              </g>
+            );
+          })}
 
           <g>
             <text x="54" y="58" fill="#eff6fc" fontSize="30" fontWeight="700">

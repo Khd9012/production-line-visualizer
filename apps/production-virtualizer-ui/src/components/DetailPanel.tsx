@@ -1,8 +1,10 @@
-import type { Cargo, FocusLine, PalletLayer, PlaybackSpeed, RobotState } from "../types";
+import type { Cargo, FocusLine, InterceptorRobotState, OutboundPallet, PalletLayer, PlaybackSpeed, RobotState } from "../types";
 
 type DetailPanelProps = {
   activeRecipe: string;
   robot: RobotState;
+  interceptorRobots: InterceptorRobotState[];
+  outboundPallets: OutboundPallet[];
   leadCargo: Cargo | undefined;
   layers: PalletLayer[];
   current: "overview" | "robot" | "pallet";
@@ -18,6 +20,8 @@ type DetailPanelProps = {
 export function DetailPanel({
   activeRecipe,
   robot,
+  interceptorRobots,
+  outboundPallets,
   leadCargo,
   layers,
   current,
@@ -56,7 +60,7 @@ export function DetailPanel({
       <div className="detail-grid">
         <div className="detail-card">
           <span>Robot Mode</span>
-          <strong>{robot.mode}</strong>
+          <strong>{robot.phase ?? robot.mode}</strong>
         </div>
         <div className="detail-card">
           <span>Cycle Progress</span>
@@ -77,6 +81,14 @@ export function DetailPanel({
         <div className="detail-card">
           <span>Playback</span>
           <strong>{playbackSpeed}x</strong>
+        </div>
+        <div className="detail-card">
+          <span>Interceptor Bots</span>
+          <strong>{interceptorRobots.length} active cells</strong>
+        </div>
+        <div className="detail-card">
+          <span>Outbound Queue</span>
+          <strong>{outboundPallets.filter((pallet) => pallet.status !== "shipped").length}</strong>
         </div>
       </div>
 
@@ -117,6 +129,16 @@ export function DetailPanel({
           <span>Place Position</span>
           <strong>
             Layer {currentLayer.layer} next slot {Math.min(currentLayer.totalCount, currentLayer.filledCount + 1)}
+          </strong>
+        </article>
+        <article>
+          <span>Main Robot Phase</span>
+          <strong>{robot.phase ?? "standby"}</strong>
+        </article>
+        <article>
+          <span>Outbound Stage</span>
+          <strong>
+            {outboundPallets.length > 0 ? `${outboundPallets.at(-1)?.dockId} / ${outboundPallets.at(-1)?.status}` : "awaiting full pallet"}
           </strong>
         </article>
         <article>

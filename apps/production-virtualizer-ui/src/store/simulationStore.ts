@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { lineBranchMap, palletCellAnchors, pickupAnchor, railSegments, trackNodeMap } from "../data/layout";
+import { lineBranchMap, outboundDocks, palletCellAnchors, pickupAnchor, trackNodeMap } from "../data/layout";
 import type {
   Cargo,
   CargoRailPhase,
@@ -10,6 +10,10 @@ import type {
   CoreSimulationSnapshot,
   EventItem,
   FocusLine,
+  InterceptorRobotPhase,
+  InterceptorRobotState,
+  MainRobotPhase,
+  OutboundPallet,
   PalletCell,
   PalletLayer,
   PlaybackSpeed,
@@ -20,6 +24,9 @@ type SimulationState = {
   cargos: Cargo[];
   palletLayers: PalletLayer[];
   robot: RobotState;
+  interceptorRobots: InterceptorRobotState[];
+  outboundPallets: OutboundPallet[];
+  releasedStackBaseline: number;
   throughput: number;
   activeRecipe: string;
   selectedPanel: "overview" | "robot" | "pallet";
@@ -50,6 +57,8 @@ type SimulationState = {
 const palette = ["#ffb84d", "#4ecdc4", "#ff6b6b", "#ffd166", "#7dd3c4", "#8ea7ff"];
 const inspectionDeviceCodes = new Set(["24926", "24927", "24928", "24929", "24930", "24931", "24932", "24933", "24934"]);
 const trackDeviceCodes = new Set(Object.keys(trackNodeMap));
+const northLines = new Set(["L1", "L2", "L3"]);
+const southLines = new Set(["L4", "L5", "L6", "L7"]);
 
 const formatTime = () =>
   new Date().toLocaleTimeString("ko-KR", {
@@ -220,16 +229,21 @@ const toCargoFromSnapshot = (snapshot: CoreDeviceStatus[], stackedCargoIds: stri
       .sort((a, b) => a.deviceCode.localeCompare(b.deviceCode))
       .map((item, index) => {
         const node = trackNodeMap[item.deviceCode];
+        const progress = Math.min(
+          0.95,
+          inspectionDeviceCodes.has(item.deviceCode) ? 0.74 + index * 0.02 : Number.parseInt(item.deviceCode.slice(-2), 10) / 12
+        );
+
         return {
           id: item.workId ?? item.deviceCode,
-          segmentIndex: Math.min(index, railSegments.length - 1),
-          progress: Number.parseInt(item.deviceCode.slice(-2), 10) / (inspectionDeviceCodes.has(item.deviceCode) ? 34 : 12),
+          segmentIndex: 0,
+          progress,
           line: node?.line ?? "L1",
+          railPhase: getCargoPhaseByProgress(node?.line ?? "L1", progress),
           state: getCargoStateByDevice(item.deviceCode),
           color: palette[index % palette.length],
-          ...getCargoCoordinates(node?.line ?? "L1", Math.min(0.95, inspectionDeviceCodes.has(item.deviceCode) ? 0.74 + index * 0.02 : Number.parseInt(item.deviceCode.slice(-2), 10) / 12)),
+          ...getCargoCoordinates(node?.line ?? "L1", progress),
           sourceDeviceCode: item.deviceCode,
-          railPhase: getCargoPhaseByProgress(node?.line ?? "L1", Math.min(0.95, inspectionDeviceCodes.has(item.deviceCode) ? 0.74 + index * 0.02 : Number.parseInt(item.deviceCode.slice(-2), 10) / 12)),
           interceptorIndex: inspectionDeviceCodes.has(item.deviceCode) ? index + 1 : Number.parseInt(item.deviceCode.slice(-1), 10)
         };
       }),
@@ -237,29 +251,229 @@ const toCargoFromSnapshot = (snapshot: CoreDeviceStatus[], stackedCargoIds: stri
   );
 };
 
-const deriveRobotState = (cargos: Cargo[], stackedCargoIds: string[]): RobotState => {
-  const pickedCargo = cargos.find((cargo) => cargo.state === "picked");
-  const bufferedCargo = cargos.find((cargo) => cargo.state === "buffered");
-  const mode: RobotState["mode"] = pickedCargo ? "placing" : bufferedCargo ? "tracking" : "idle";
-  const cycleProgress = pickedCargo ? 0.46 : bufferedCargo ? 0.22 : 0.08;
-  const nextTarget = getNextPalletTarget(stackedCargoIds);
+const getMainRobotPhase = (progress: number): MainRobotPhase => {
+  if (progress < 0.12) {
+    return "rotate";
+  }
+  if (progress < 0.24) {
+    return "lower";
+  }
+  if (progress < 0.38) {
+    return "suction";
+  }
+  if (progress < 0.52) {
+    return "lift";
+  }
+  if (progress < 0.82) {
+    return "transfer";
+  }
+  return "place";
+};
 
-  if (mode === "placing") {
+const interpolate = (from: number, to: number, progress: number) => from + (to - from) * progress;
+
+const buildMainRobotState = (
+  cargos: Cargo[],
+  stackedCargoIds: string[],
+  previousRobot: RobotState,
+  speedFactor: number,
+  connectionStatus: SimulationState["connectionStatus"]
+): RobotState => {
+  const pickedCargo = cargos.find((cargo) => cargo.state === "picked" || cargo.railPhase === "placing");
+  const bufferedCargo = cargos.find((cargo) => cargo.state === "buffered");
+
+  if (!pickedCargo && !bufferedCargo) {
     return {
-      mode,
+      mode: "idle",
+      armX: 960,
+      armY: 154,
+      activeCargoId: previousRobot.activeCargoId,
+      cycleProgress: Math.max(0.05, previousRobot.cycleProgress - 0.05 * speedFactor),
+      phase: "standby",
+      pickX: pickupAnchor.x,
+      pickY: pickupAnchor.y
+    };
+  }
+
+  if (pickedCargo?.palletTarget) {
+    const cycleProgress =
+      previousRobot.mode === "placing" ? Math.min(1, previousRobot.cycleProgress + 0.03 * speedFactor) : connectionStatus === "live" ? 0.08 : 0.16;
+    const phase = getMainRobotPhase(cycleProgress);
+    const pickX = pickupAnchor.x;
+    const pickY = pickupAnchor.y;
+    const targetX = pickedCargo.palletTarget.x;
+    const targetY = pickedCargo.palletTarget.y;
+
+    let armX = pickX;
+    let armY = 146;
+
+    if (phase === "rotate") {
+      armX = interpolate(960, pickX, cycleProgress / 0.12);
+      armY = interpolate(154, 158, cycleProgress / 0.12);
+    } else if (phase === "lower") {
+      armX = pickX;
+      armY = interpolate(158, pickY, (cycleProgress - 0.12) / 0.12);
+    } else if (phase === "suction") {
+      armX = pickX;
+      armY = pickY + Math.sin(((cycleProgress - 0.24) / 0.14) * Math.PI) * 2;
+    } else if (phase === "lift") {
+      armX = pickX;
+      armY = interpolate(pickY, 156, (cycleProgress - 0.38) / 0.14);
+    } else if (phase === "transfer") {
+      const progress = (cycleProgress - 0.52) / 0.3;
+      armX = interpolate(pickX, targetX, progress);
+      armY = interpolate(156, targetY - 12, progress) - Math.sin(progress * Math.PI) * 34;
+    } else {
+      const progress = (cycleProgress - 0.82) / 0.18;
+      armX = targetX;
+      armY = interpolate(targetY - 12, targetY + 8, progress);
+    }
+
+    return {
+      mode: "placing",
+      armX,
+      armY,
+      activeCargoId: pickedCargo.id,
       cycleProgress,
-      armX: pickupAnchor.x + (nextTarget.x - pickupAnchor.x) * cycleProgress,
-      armY: pickupAnchor.y + (nextTarget.y - pickupAnchor.y) * cycleProgress,
-      activeCargoId: pickedCargo?.id
+      phase,
+      pickX,
+      pickY
     };
   }
 
   return {
-    mode,
-    cycleProgress,
-    armX: bufferedCargo ? 918 : 960,
-    armY: bufferedCargo ? 172 : 154,
-    activeCargoId: bufferedCargo?.id ?? stackedCargoIds.at(-1)
+    mode: "tracking",
+    armX: interpolate(previousRobot.armX ?? 960, pickupAnchor.x + 14, 0.16 * speedFactor),
+    armY: interpolate(previousRobot.armY ?? 154, pickupAnchor.y - 8, 0.18 * speedFactor),
+    activeCargoId: bufferedCargo?.id ?? stackedCargoIds.at(-1),
+    cycleProgress: Math.min(0.5, previousRobot.mode === "tracking" ? previousRobot.cycleProgress + 0.02 * speedFactor : 0.1),
+    phase: "rotate",
+    pickX: pickupAnchor.x,
+    pickY: pickupAnchor.y
+  };
+};
+
+const buildInterceptorRobots = (cargos: Cargo[], previousRobots: InterceptorRobotState[], speedFactor: number): InterceptorRobotState[] => {
+  const definitions = [
+    { id: "INT-R1", label: "Interceptor R1", zone: "north" as const, baseX: 688, baseY: 194, releaseX: 722, releaseY: 208, lines: northLines, lineGroup: "L1-L3" },
+    { id: "INT-R2", label: "Interceptor R2", zone: "south" as const, baseX: 688, baseY: 340, releaseX: 722, releaseY: 332, lines: southLines, lineGroup: "L4-L7" }
+  ];
+
+  return definitions.map((definition, index) => {
+    const previous = previousRobots[index] ?? {
+      id: definition.id,
+      label: definition.label,
+      zone: definition.zone,
+      armX: definition.baseX,
+      armY: definition.baseY,
+      phase: "idle" as InterceptorRobotPhase,
+      cycleProgress: 0,
+      activeCargoId: undefined,
+      lineGroup: definition.lineGroup
+    };
+
+    const activeCargo = cargos
+      .filter((cargo) => definition.lines.has(cargo.line) && cargo.railPhase && ["branching", "interceptor", "inspection"].includes(cargo.railPhase))
+      .sort((a, b) => b.progress - a.progress)[0];
+
+    if (!activeCargo || activeCargo.x === undefined || activeCargo.y === undefined) {
+      return {
+        ...previous,
+        armX: interpolate(previous.armX, definition.baseX, 0.18 * speedFactor),
+        armY: interpolate(previous.armY, definition.baseY, 0.18 * speedFactor),
+        cycleProgress: Math.max(0, previous.cycleProgress - 0.06 * speedFactor),
+        phase: "idle",
+        activeCargoId: undefined
+      };
+    }
+
+    const pickX = activeCargo.x + 12;
+    const pickY = activeCargo.y + 8;
+    let phase: InterceptorRobotPhase = "align";
+    if (activeCargo.railPhase === "interceptor") {
+      phase = activeCargo.progress > 0.68 ? "pick" : "align";
+    } else if (activeCargo.railPhase === "inspection") {
+      phase = "release";
+    } else {
+      phase = "transfer";
+    }
+
+    const cycleProgress = Math.min(1, previous.activeCargoId === activeCargo.id ? previous.cycleProgress + 0.04 * speedFactor : 0.12);
+    let armX = definition.baseX;
+    let armY = definition.baseY;
+
+    if (phase === "align") {
+      armX = interpolate(definition.baseX, pickX, cycleProgress);
+      armY = interpolate(definition.baseY, pickY - 18, cycleProgress);
+    } else if (phase === "pick") {
+      armX = pickX;
+      armY = interpolate(pickY - 18, pickY, Math.min(1, cycleProgress * 1.6));
+    } else if (phase === "transfer") {
+      armX = interpolate(pickX, definition.releaseX, cycleProgress);
+      armY = interpolate(pickY, definition.releaseY, cycleProgress) - Math.sin(cycleProgress * Math.PI) * 16;
+    } else {
+      armX = definition.releaseX;
+      armY = definition.releaseY;
+    }
+
+    return {
+      id: definition.id,
+      label: definition.label,
+      zone: definition.zone,
+      armX,
+      armY,
+      phase,
+      cycleProgress,
+      activeCargoId: activeCargo.id,
+      lineGroup: definition.lineGroup
+    };
+  });
+};
+
+const advanceOutboundPallets = (outboundPallets: OutboundPallet[], speedFactor: number): OutboundPallet[] =>
+  outboundPallets
+    .map((pallet) => {
+      if (pallet.status === "shipped") {
+        return pallet;
+      }
+
+      const nextProgress = Math.min(1, pallet.progress + 0.045 * speedFactor);
+      return {
+        ...pallet,
+        progress: nextProgress,
+        status: (nextProgress >= 1 ? "shipped" : nextProgress > 0.12 ? "moving" : "staging") as OutboundPallet["status"]
+      };
+    })
+    .slice(-4);
+
+const releaseCompletedPallet = (
+  stackedCargoIds: string[],
+  outboundPallets: OutboundPallet[],
+  events: EventItem[],
+  releasedStackBaseline: number
+) => {
+  if (stackedCargoIds.length < 27) {
+    return { stackedCargoIds, outboundPallets, events, releasedStackBaseline };
+  }
+
+  const nextDock = outboundDocks[outboundPallets.length % outboundDocks.length];
+  const palletId = `PLT-${Date.now().toString().slice(-5)}`;
+
+  return {
+    stackedCargoIds: [],
+    outboundPallets: [
+      ...outboundPallets,
+      {
+        id: palletId,
+        boxCount: 27,
+        releasedAt: formatTime(),
+        progress: 0,
+        dockId: nextDock.id,
+        status: "staging" as const
+      }
+    ].slice(-4),
+    events: appendEvent(events, "Outbound release", `${palletId} completed 3 layers and moved to ${nextDock.id}`, "accent"),
+    releasedStackBaseline: releasedStackBaseline + 27
   };
 };
 
@@ -274,13 +488,22 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   palletLayers: createLayersFromStack(["L1-1", "L1-2", "L1-3", "L1-4", "L1-5", "L1-6", "L1-7", "L1-8", "L1-9", "L2-1", "L2-2"]),
   robot: {
     mode: "tracking",
-    armX: 862,
-    armY: 192,
+    armX: 918,
+    armY: 170,
     activeCargoId: "BX-204",
-    cycleProgress: 0.38
+    cycleProgress: 0.14,
+    phase: "rotate",
+    pickX: pickupAnchor.x,
+    pickY: pickupAnchor.y
   },
+  interceptorRobots: [
+    { id: "INT-R1", label: "Interceptor R1", zone: "north", armX: 688, armY: 194, phase: "idle", cycleProgress: 0, lineGroup: "L1-L3" },
+    { id: "INT-R2", label: "Interceptor R2", zone: "south", armX: 688, armY: 340, phase: "idle", cycleProgress: 0, lineGroup: "L4-L7" }
+  ],
+  outboundPallets: [],
+  releasedStackBaseline: 0,
   throughput: 148,
-  activeRecipe: "3x3 brick stack / verification gated / outbound staged",
+  activeRecipe: "mainline split -> interceptor robots -> 3-layer pallet -> outbound",
   selectedPanel: "overview",
   focusedLine: "ALL",
   playbackSpeed: 1,
@@ -295,8 +518,8 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   apmStatus: null,
   lineStates: {},
   events: [
-    { id: "evt-1", time: formatTime(), title: "Line Sync", detail: "Inspection conveyor handing off verified cargo to the robot cell", tone: "accent" },
-    { id: "evt-2", time: formatTime(), title: "Stack Recipe", detail: "Second layer is actively balancing outbound pallet load", tone: "normal" }
+    { id: "evt-1", time: formatTime(), title: "Interceptor Flow", detail: "Two interceptor robots gate cargo into the inspection spine", tone: "accent" },
+    { id: "evt-2", time: formatTime(), title: "Outbound Logic", detail: "A full 3-layer pallet releases automatically to the dock lane", tone: "normal" }
   ],
   setSelectedPanel: (selectedPanel) => set({ selectedPanel }),
   setFocusedLine: (focusedLine) => set({ focusedLine }),
@@ -309,16 +532,38 @@ export const useSimulationStore = create<SimulationState>((set) => ({
       const apmStatus = snapshot.apmStatus;
       const orderQty = Number.parseInt(apmStatus?.orderQty ?? "0", 10);
       const completeQty = Number.parseInt(apmStatus?.completeQty ?? "0", 10);
-      const derivedStackCount = orderQty > 0 ? Math.min(27, Math.floor(completeQty / 3)) : state.stackedCargoIds.length;
-      const stackedCargoIds =
-        derivedStackCount > state.stackedCargoIds.length
+      const absoluteStackCount = orderQty > 0 ? Math.floor(completeQty / 3) : 0;
+      const releasedStackBaseline = absoluteStackCount < state.releasedStackBaseline ? 0 : state.releasedStackBaseline;
+      const visibleStackCount = Math.max(0, absoluteStackCount - releasedStackBaseline);
+
+      let stackedCargoIds =
+        visibleStackCount > state.stackedCargoIds.length
           ? [
               ...state.stackedCargoIds,
-              ...Array.from({ length: derivedStackCount - state.stackedCargoIds.length }, (_, index) => `APM-${state.stackedCargoIds.length + index + 1}`)
+              ...Array.from({ length: visibleStackCount - state.stackedCargoIds.length }, (_, index) => `APM-${state.stackedCargoIds.length + index + 1}`)
             ].slice(-27)
-          : state.stackedCargoIds.slice(0, Math.max(derivedStackCount, state.stackedCargoIds.length));
+          : state.stackedCargoIds.slice(0, Math.max(visibleStackCount, state.stackedCargoIds.length));
+
+      let events =
+        snapshot.robots.length > 0
+          ? appendEvent(
+              state.events,
+              `Robot ${snapshot.robots[0].robotNo} cycle`,
+              `Load L${snapshot.robots[0].loadingLine} -> unload L${snapshot.robots[0].unLoadingLine} / ${snapshot.robots[0].totalOrderCount} box order`,
+              "normal"
+            )
+          : state.events;
+
+      let outboundPallets = advanceOutboundPallets(state.outboundPallets, state.playbackSpeed);
+      const release = releaseCompletedPallet(stackedCargoIds, outboundPallets, events, releasedStackBaseline);
+      stackedCargoIds = release.stackedCargoIds;
+      outboundPallets = release.outboundPallets;
+      events = release.events;
+
       const palletLayers = createLayersFromStack(stackedCargoIds);
       const cargos = attachPalletTarget(state.cargos, stackedCargoIds);
+      const robot = buildMainRobotState(cargos, stackedCargoIds, state.robot, state.playbackSpeed, state.connectionStatus);
+      const interceptorRobots = buildInterceptorRobots(cargos, state.interceptorRobots, state.playbackSpeed);
 
       return {
         robots: snapshot.robots ?? [],
@@ -327,15 +572,10 @@ export const useSimulationStore = create<SimulationState>((set) => ({
         palletLayers,
         stackedCargoIds,
         cargos,
-        events:
-          snapshot.robots.length > 0
-            ? appendEvent(
-                state.events,
-                `Robot ${snapshot.robots[0].robotNo} cycle`,
-                `Load L${snapshot.robots[0].loadingLine} -> unload L${snapshot.robots[0].unLoadingLine} / ${snapshot.robots[0].totalOrderCount} box order`,
-                "normal"
-              )
-            : state.events
+        robot,
+        interceptorRobots,
+        outboundPallets,
+        releasedStackBaseline: release.releasedStackBaseline
       };
     }),
   ingestCoreSnapshot: (snapshot) =>
@@ -348,26 +588,22 @@ export const useSimulationStore = create<SimulationState>((set) => ({
         (workId) => !state.lastInspectionWorkIds.includes(workId) && !state.stackedCargoIds.includes(workId)
       );
 
-      const stackedCargoIds = [...state.stackedCargoIds, ...newlyObserved].slice(-27);
-      const palletLayers = createLayersFromStack(stackedCargoIds);
-      const cargos = toCargoFromSnapshot(snapshot, stackedCargoIds);
-      const robot = deriveRobotState(cargos, stackedCargoIds);
-      const activeDevices = snapshot.filter((item) => item.status === "1" || item.status === "2");
-      const errorDevices = snapshot.filter((item) => item.status === "2");
-
+      let stackedCargoIds = [...state.stackedCargoIds, ...newlyObserved].slice(-27);
       let events = state.events;
+      let outboundPallets = advanceOutboundPallets(state.outboundPallets, state.playbackSpeed);
 
       if (newlyObserved.length > 0) {
-        const latestStacked = stackedCargoIds.length;
+        const latestStacked = Math.min(stackedCargoIds.length, 27);
         const currentLayer = Math.ceil(latestStacked / 9);
         const slot = latestStacked - (currentLayer - 1) * 9;
         events = appendEvent(
           events,
-          `Layer ${currentLayer} stacked`,
-          `${newlyObserved.at(-1)} placed on pallet slot ${slot}`,
+          `Layer ${currentLayer} staged`,
+          `${newlyObserved.at(-1)} buffered into pallet slot ${slot}`,
           "accent"
         );
       } else {
+        const activeDevices = snapshot.filter((item) => item.status === "1" || item.status === "2");
         const latest = activeDevices[0] ?? snapshot[0];
         if (latest) {
           events = appendEvent(
@@ -379,32 +615,69 @@ export const useSimulationStore = create<SimulationState>((set) => ({
         }
       }
 
+      const release = releaseCompletedPallet(stackedCargoIds, outboundPallets, events, state.releasedStackBaseline);
+      stackedCargoIds = release.stackedCargoIds;
+      outboundPallets = release.outboundPallets;
+      events = release.events;
+
+      const cargos = toCargoFromSnapshot(snapshot, stackedCargoIds);
+      const palletLayers = createLayersFromStack(stackedCargoIds);
+      const robot = buildMainRobotState(cargos, stackedCargoIds, state.robot, state.playbackSpeed, state.connectionStatus);
+      const interceptorRobots = buildInterceptorRobots(cargos, state.interceptorRobots, state.playbackSpeed);
+      const activeDevices = snapshot.filter((item) => item.status === "1" || item.status === "2");
+      const errorDevices = snapshot.filter((item) => item.status === "2");
+
       return {
         cargos,
         palletLayers,
         robot,
+        interceptorRobots,
+        outboundPallets,
+        releasedStackBaseline: release.releasedStackBaseline,
         stackedCargoIds,
         lastInspectionWorkIds: inspectionWorkIds,
         liveDeviceCount: snapshot.length,
         lastRealtimeAt: formatTime(),
-        throughput: Math.max(126, 116 + activeDevices.length * 2 + stackedCargoIds.length - errorDevices.length * 6),
+        throughput: Math.max(126, 116 + activeDevices.length * 2 + stackedCargoIds.length + outboundPallets.length * 5 - errorDevices.length * 6),
         events
       };
     }),
   tick: () =>
     set((state) => {
       const speedFactor = state.playbackSpeed;
-      const stackedCargoIds = state.stackedCargoIds;
+      const existingInspectionCount = state.cargos.filter((cargo) => cargo.railPhase === "inspection" || cargo.railPhase === "pickup").length;
+
+      let stackedCargoIds = state.stackedCargoIds;
+      let events = state.events;
+
       const cargos = attachPalletTarget(
         state.cargos.map((cargo) => {
           if (state.connectionStatus === "live") {
             return cargo;
           }
 
-          const step = cargo.line === "QC" ? 0.035 * speedFactor : cargo.state === "buffered" ? 0.024 * speedFactor : 0.05 * speedFactor;
-          const nextProgress = Math.min(0.97, cargo.progress + step);
+          const lineOccupancy = state.cargos.filter(
+            (item) =>
+              item.line === cargo.line &&
+              item.id !== cargo.id &&
+              item.progress > cargo.progress &&
+              item.railPhase &&
+              ["interceptor", "inspection", "pickup"].includes(item.railPhase)
+          ).length;
+
+          const qcBlocked = cargo.line !== "QC" && existingInspectionCount > 2 && cargo.progress > 0.74;
+          const stepBase = cargo.line === "QC" ? 0.025 : cargo.state === "buffered" ? 0.018 : 0.04;
+          let nextProgress = Math.min(0.98, cargo.progress + stepBase * speedFactor);
+
+          if (lineOccupancy > 0 && cargo.progress > 0.42 && cargo.progress < 0.7) {
+            nextProgress = Math.min(nextProgress, 0.46);
+          }
+          if (qcBlocked) {
+            nextProgress = Math.min(nextProgress, 0.79);
+          }
+
+          const railPhase = getCargoPhaseByProgress(cargo.line, nextProgress);
           const coords = getCargoCoordinates(cargo.line, nextProgress);
-          const phase = getCargoPhaseByProgress(cargo.line, nextProgress);
           const stateMap: CargoState =
             cargo.line === "QC"
               ? nextProgress > 0.88
@@ -418,23 +691,12 @@ export const useSimulationStore = create<SimulationState>((set) => ({
                   ? "moving"
                   : "queued";
 
-          if (phase === "placing") {
-            return {
-              ...cargo,
-              progress: nextProgress,
-              x: coords.x,
-              y: coords.y,
-              railPhase: phase,
-              state: "picked"
-            };
-          }
-
           return {
             ...cargo,
             progress: nextProgress,
             x: coords.x,
             y: coords.y,
-            railPhase: phase,
+            railPhase,
             state: stateMap,
             interceptorIndex: cargo.line === "QC" ? 9 : Math.max(1, Math.min(9, Math.round(nextProgress * 9)))
           };
@@ -442,39 +704,33 @@ export const useSimulationStore = create<SimulationState>((set) => ({
         stackedCargoIds
       );
 
-      const derivedRobot = deriveRobotState(cargos, stackedCargoIds);
-      const robot =
-        derivedRobot.mode === "placing"
-          ? {
-              ...derivedRobot,
-              cycleProgress: Math.min(0.82, state.robot.mode === "placing" ? state.robot.cycleProgress + 0.04 * speedFactor : 0.18),
-              armX: pickupAnchor.x + ((cargos.find((cargo) => cargo.id === derivedRobot.activeCargoId)?.palletTarget?.x ?? derivedRobot.armX) - pickupAnchor.x) * Math.min(0.82, state.robot.mode === "placing" ? state.robot.cycleProgress + 0.04 * speedFactor : 0.18),
-              armY: pickupAnchor.y + ((cargos.find((cargo) => cargo.id === derivedRobot.activeCargoId)?.palletTarget?.y ?? derivedRobot.armY) - pickupAnchor.y) * Math.min(0.82, state.robot.mode === "placing" ? state.robot.cycleProgress + 0.04 * speedFactor : 0.18)
-            }
-          : derivedRobot.mode === "tracking"
-            ? {
-                ...derivedRobot,
-                cycleProgress: Math.min(0.5, state.robot.mode === "tracking" ? state.robot.cycleProgress + 0.025 * speedFactor : 0.08)
-              }
-            : {
-                ...derivedRobot,
-                cycleProgress: Math.max(0.05, state.robot.cycleProgress - 0.04 * speedFactor)
-              };
+      const robot = buildMainRobotState(cargos, stackedCargoIds, state.robot, speedFactor, state.connectionStatus);
+      const interceptorRobots = buildInterceptorRobots(cargos, state.interceptorRobots, speedFactor);
+      let outboundPallets = advanceOutboundPallets(state.outboundPallets, speedFactor);
 
-      if (state.connectionStatus === "live") {
-        const bob = Math.sin(Date.now() / (540 / speedFactor)) * 4;
-        return {
-          cargos,
-          robot: {
-            ...robot,
-            armY: robot.mode === "tracking" ? robot.armY + bob : robot.armY
-          }
-        };
+      if (state.connectionStatus !== "live" && robot.mode === "placing" && robot.phase === "place" && robot.cycleProgress >= 0.99) {
+        const activeCargoId = robot.activeCargoId;
+        if (activeCargoId && !stackedCargoIds.includes(activeCargoId)) {
+          stackedCargoIds = [...stackedCargoIds, activeCargoId].slice(-27);
+          events = appendEvent(events, "Pallet cell filled", `${activeCargoId} locked into the current pallet layer`, "accent");
+        }
       }
 
+      const release = releaseCompletedPallet(stackedCargoIds, outboundPallets, events, state.releasedStackBaseline);
+      stackedCargoIds = release.stackedCargoIds;
+      outboundPallets = release.outboundPallets;
+      events = release.events;
+
       return {
-        cargos,
-        robot
+        cargos: attachPalletTarget(cargos, stackedCargoIds),
+        palletLayers: createLayersFromStack(stackedCargoIds),
+        stackedCargoIds,
+        robot,
+        interceptorRobots,
+        outboundPallets,
+        releasedStackBaseline: release.releasedStackBaseline,
+        throughput: state.throughput + (outboundPallets.some((pallet) => pallet.status === "moving") ? 1 : 0),
+        events
       };
     })
 }));

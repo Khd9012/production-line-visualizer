@@ -16,6 +16,8 @@ export default function App() {
     cargos,
     palletLayers,
     robot,
+    interceptorRobots,
+    outboundPallets,
     throughput,
     activeRecipe,
     selectedPanel,
@@ -125,7 +127,7 @@ export default function App() {
 
       <section className="stats-grid">
         <StatCard label="Current Throughput" value={`${throughput} bx/h`} meta="hybrid sim + core feed" tone="accent" />
-        <StatCard label="Robot Cycle" value={`${Math.round(robot.cycleProgress * 100)}%`} meta={robot.mode} />
+        <StatCard label="Robot Cycle" value={`${Math.round(robot.cycleProgress * 100)}%`} meta={robot.phase ?? robot.mode} />
         <StatCard label="Active Cargo" value={leadCargo?.id ?? "None"} meta={leadCargo?.state ?? "idle"} />
         <StatCard label="Focused Line" value={focusedLine} meta={`playback ${playbackSpeed}x`} />
         <StatCard
@@ -133,7 +135,7 @@ export default function App() {
           value={connectionStatus === "live" ? "ONLINE" : connectionStatus.toUpperCase()}
           meta={`db ${databaseAlive === null ? "..." : databaseAlive ? "ok" : "down"} / ${liveDeviceCount} devices`}
         />
-        <StatCard label="Pallet Fill" value={`${totalStacked}/27`} meta="three-layer recipe" />
+        <StatCard label="Pallet Fill" value={`${totalStacked}/27`} meta={`${outboundPallets.length} outbound pallets`} />
       </section>
 
       <ProcessControls
@@ -144,10 +146,20 @@ export default function App() {
       />
 
       <section className="workspace-grid">
-        <FloorView cargos={cargos} robot={robot} layers={palletLayers} focusedLine={focusedLine} playbackSpeed={playbackSpeed} />
+        <FloorView
+          cargos={cargos}
+          robot={robot}
+          interceptorRobots={interceptorRobots}
+          outboundPallets={outboundPallets}
+          layers={palletLayers}
+          focusedLine={focusedLine}
+          playbackSpeed={playbackSpeed}
+        />
         <DetailPanel
           activeRecipe={activeRecipe}
           robot={robot}
+          interceptorRobots={interceptorRobots}
+          outboundPallets={outboundPallets}
           leadCargo={leadCargo}
           layers={palletLayers}
           current={selectedPanel}
@@ -159,7 +171,7 @@ export default function App() {
           liveDeviceCount={liveDeviceCount}
           lastRealtimeAt={lastRealtimeAt}
         />
-        <RobotFleetPanel robots={robots} apmStatus={apmStatus} />
+        <RobotFleetPanel robots={robots} apmStatus={apmStatus} interceptorRobots={interceptorRobots} outboundPallets={outboundPallets} />
         <PalletStackPanel layers={palletLayers} />
         <EventTimeline events={events} />
       </section>

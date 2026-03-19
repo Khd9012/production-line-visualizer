@@ -1,11 +1,13 @@
-import type { CoreApmStatus, CoreRobotInfo } from "../types";
+import type { CoreApmStatus, CoreRobotInfo, InterceptorRobotState, OutboundPallet } from "../types";
 
 type RobotFleetPanelProps = {
   robots: CoreRobotInfo[];
   apmStatus: CoreApmStatus | null;
+  interceptorRobots: InterceptorRobotState[];
+  outboundPallets: OutboundPallet[];
 };
 
-export function RobotFleetPanel({ robots, apmStatus }: RobotFleetPanelProps) {
+export function RobotFleetPanel({ robots, apmStatus, interceptorRobots, outboundPallets }: RobotFleetPanelProps) {
   return (
     <section className="panel robot-fleet-panel">
       <div className="panel__header">
@@ -53,6 +55,35 @@ export function RobotFleetPanel({ robots, apmStatus }: RobotFleetPanelProps) {
         ))}
       </div>
 
+      <div className="robot-fleet-list">
+        {interceptorRobots.map((robot) => (
+          <article key={robot.id} className="robot-card">
+            <div className="robot-card__header">
+              <strong>{robot.label}</strong>
+              <span>{robot.phase}</span>
+            </div>
+            <div className="robot-card__grid">
+              <div>
+                <span>Coverage</span>
+                <strong>{robot.lineGroup}</strong>
+              </div>
+              <div>
+                <span>Active cargo</span>
+                <strong>{robot.activeCargoId ?? "idle"}</strong>
+              </div>
+              <div>
+                <span>Cycle</span>
+                <strong>{Math.round(robot.cycleProgress * 100)}%</strong>
+              </div>
+              <div>
+                <span>Zone</span>
+                <strong>{robot.zone}</strong>
+              </div>
+            </div>
+          </article>
+        ))}
+      </div>
+
       <div className="apm-card">
         <div className="apm-card__header">
           <strong>APM Stack Progress</strong>
@@ -76,6 +107,14 @@ export function RobotFleetPanel({ robots, apmStatus }: RobotFleetPanelProps) {
           <div>
             <span>Place</span>
             <strong>{apmStatus?.placeProcess ?? "0"}</strong>
+          </div>
+          <div>
+            <span>Outbound</span>
+            <strong>{outboundPallets.length}</strong>
+          </div>
+          <div>
+            <span>Latest Dock</span>
+            <strong>{outboundPallets.at(-1)?.dockId ?? "-"}</strong>
           </div>
         </div>
       </div>
