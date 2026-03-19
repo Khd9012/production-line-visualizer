@@ -1,4 +1,4 @@
-import type { Cargo, PalletLayer, RobotState } from "../types";
+import type { Cargo, FocusLine, PalletLayer, PlaybackSpeed, RobotState } from "../types";
 
 type DetailPanelProps = {
   activeRecipe: string;
@@ -6,6 +6,8 @@ type DetailPanelProps = {
   leadCargo: Cargo | undefined;
   layers: PalletLayer[];
   current: "overview" | "robot" | "pallet";
+  focusedLine: FocusLine;
+  playbackSpeed: PlaybackSpeed;
   connectionStatus: "connecting" | "live" | "offline";
   databaseAlive: boolean | null;
   schedulerSummary: string;
@@ -19,6 +21,8 @@ export function DetailPanel({
   leadCargo,
   layers,
   current,
+  focusedLine,
+  playbackSpeed,
   connectionStatus,
   databaseAlive,
   schedulerSummary,
@@ -66,6 +70,14 @@ export function DetailPanel({
           <span>Current Layer</span>
           <strong>{currentLayer.layer}</strong>
         </div>
+        <div className="detail-card">
+          <span>Zoom Focus</span>
+          <strong>{focusedLine}</strong>
+        </div>
+        <div className="detail-card">
+          <span>Playback</span>
+          <strong>{playbackSpeed}x</strong>
+        </div>
       </div>
 
       <div className="detail-progress">
@@ -99,11 +111,13 @@ export function DetailPanel({
         </article>
         <article>
           <span>Pick Position</span>
-          <strong>BUF-02 / PICK-01 handoff</strong>
+          <strong>{focusedLine === "QC" ? "QC gate / robot pickup" : `${focusedLine === "ALL" ? "buffer" : focusedLine} / robot pickup`}</strong>
         </article>
         <article>
           <span>Place Position</span>
-          <strong>Layer {currentLayer.layer} next slot {currentLayer.filledCount + 1}</strong>
+          <strong>
+            Layer {currentLayer.layer} next slot {Math.min(currentLayer.totalCount, currentLayer.filledCount + 1)}
+          </strong>
         </article>
         <article>
           <span>Estimated Completion</span>

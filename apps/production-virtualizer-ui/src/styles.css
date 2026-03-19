@@ -95,9 +95,56 @@ select {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 16px;
   margin-top: 18px;
+}
+
+.process-controls {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 18px;
+}
+
+.process-controls__group {
+  display: grid;
+  gap: 14px;
+}
+
+.process-controls__group h3 {
+  margin: 6px 0 0;
+}
+
+.process-controls__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.process-controls__button {
+  border: 1px solid rgba(140, 180, 214, 0.18);
+  color: #cfe0ef;
+  background: rgba(10, 20, 34, 0.88);
+  padding: 10px 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    transform 160ms ease,
+    background 160ms ease;
+}
+
+.process-controls__button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(125, 211, 196, 0.5);
+}
+
+.process-controls__button.is-active {
+  background: linear-gradient(135deg, rgba(125, 211, 196, 0.26), rgba(255, 184, 77, 0.18));
+  border-color: rgba(255, 184, 77, 0.5);
+  color: #f7fbff;
+  font-weight: 700;
 }
 
 .stat-card,
@@ -177,6 +224,10 @@ select {
 .floor-canvas {
   overflow: hidden;
   border-radius: 24px;
+  border: 1px solid rgba(140, 180, 214, 0.12);
+  background:
+    radial-gradient(circle at 20% 18%, rgba(77, 177, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, rgba(7, 17, 29, 0.42), rgba(7, 17, 29, 0.14));
 }
 
 .floor-canvas svg {
@@ -202,6 +253,7 @@ select {
   padding: 14px;
   border-radius: 18px;
   background: rgba(14, 28, 44, 0.92);
+  border: 1px solid rgba(140, 180, 214, 0.08);
 }
 
 .robot-card__header,
@@ -334,16 +386,29 @@ select {
 }
 
 .pallet-grid__cell {
+  display: grid;
+  place-items: end start;
   aspect-ratio: 1;
   border-radius: 10px;
   border: 1px dashed rgba(151, 178, 200, 0.35);
   background: rgba(10, 22, 35, 0.92);
+  padding: 6px;
+}
+
+.pallet-grid__cell span {
+  color: #85a3bd;
+  font-size: 0.68rem;
 }
 
 .pallet-grid__cell.is-filled {
   border-style: solid;
   border-color: rgba(255, 255, 255, 0.55);
   box-shadow: inset 0 -8px 18px rgba(0, 0, 0, 0.18);
+}
+
+.pallet-grid__cell.is-filled span {
+  color: #08111c;
+  font-weight: 700;
 }
 
 .timeline-list {
@@ -386,6 +451,10 @@ select {
 }
 
 @media (max-width: 1180px) {
+  .process-controls {
+    grid-template-columns: 1fr;
+  }
+
   .workspace-grid {
     grid-template-columns: 1fr;
   }

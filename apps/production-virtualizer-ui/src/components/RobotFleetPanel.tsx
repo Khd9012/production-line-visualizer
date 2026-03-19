@@ -40,6 +40,14 @@ export function RobotFleetPanel({ robots, apmStatus }: RobotFleetPanelProps) {
                 <span>Box code</span>
                 <strong>{robot.mBoxCd || 0}</strong>
               </div>
+              <div>
+                <span>Motion</span>
+                <strong>{robot.motionCode || 0}</strong>
+              </div>
+              <div>
+                <span>Error</span>
+                <strong>{robot.errorCode || 0}</strong>
+              </div>
             </div>
           </article>
         ))}

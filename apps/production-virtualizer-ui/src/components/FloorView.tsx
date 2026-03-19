@@ -1,141 +1,246 @@
-import { railSegments, trackNodes } from "../data/layout";
-import type { Cargo, RobotState } from "../types";
+import { focusViewBoxes, outboundDocks, palletCellAnchors, processZones, trackNodes } from "../data/layout";
+import type { Cargo, FocusLine, PalletLayer, PlaybackSpeed, RobotState } from "../types";
 
 type FloorViewProps = {
   cargos: Cargo[];
   robot: RobotState;
+  layers: PalletLayer[];
+  focusedLine: FocusLine;
+  playbackSpeed: PlaybackSpeed;
 };
 
-const segmentColor = {
-  idle: "#234160",
-  active: "#49dcb1",
-  blocked: "#ff6b6b"
+const zoneToneMap = {
+  teal: { fill: "rgba(28, 77, 77, 0.26)", stroke: "#52c6be" },
+  amber: { fill: "rgba(103, 74, 19, 0.25)", stroke: "#ffcb6b" },
+  blue: { fill: "rgba(26, 48, 92, 0.26)", stroke: "#77a7ff" },
+  rose: { fill: "rgba(102, 42, 58, 0.26)", stroke: "#ff8ca1" }
 };
 
-export function FloorView({ cargos, robot }: FloorViewProps) {
+const lineLabelY: Record<string, number> = {
+  L1: 152,
+  L2: 196,
+  L3: 240,
+  L4: 284,
+  L5: 328,
+  L6: 372,
+  L7: 416
+};
+
+const getPalletOffset = (layer: number) => ({
+  x: (layer - 1) * 5,
+  y: (3 - layer) * 11
+});
+
+const getNextTargetCell = (layers: PalletLayer[]) => {
+  const totalFilled = layers.reduce((sum, layer) => sum + layer.filledCount, 0);
+  if (totalFilled >= 27) {
+    return null;
+  }
+
+  const layerIndex = Math.floor(totalFilled / 9);
+  const cellIndex = totalFilled % 9;
+  const layer = layers[layerIndex];
+  const cell = layer.cells[cellIndex];
+  const offset = getPalletOffset(layer.layer);
+
+  return {
+    ...cell,
+    layer: layer.layer,
+    renderX: cell.x + offset.x,
+    renderY: cell.y - offset.y
+  };
+};
+
+const isLineVisible = (line: string, focusedLine: FocusLine) => focusedLine === "ALL" || focusedLine === line;
+
+export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }: FloorViewProps) {
+  const nextTargetCell = getNextTargetCell(layers);
+  const activeCargo = cargos.find((cargo) => cargo.id === robot.activeCargoId) ?? cargos.find((cargo) => cargo.state === "picked");
+  const transitionDuration = `${Math.max(0.2, 1.15 / playbackSpeed)}s`;
+
+  const placingCargoPosition =
+    activeCargo?.palletTarget && activeCargo.x !== undefined && activeCargo.y !== undefined && robot.mode === "placing"
+      ? {
+          x: activeCargo.x + (activeCargo.palletTarget.x - activeCargo.x) * robot.cycleProgress,
+          y:
+            activeCargo.y +
+            (activeCargo.palletTarget.y - activeCargo.y) * robot.cycleProgress -
+            Math.sin(robot.cycleProgress * Math.PI) * 42
+        }
+      : null;
+
+  const trackingCargoPosition =
+    activeCargo?.x !== undefined && activeCargo?.y !== undefined && robot.mode === "tracking"
+      ? {
+          x: activeCargo.x + (900 - activeCargo.x) * robot.cycleProgress,
+          y: activeCargo.y + (176 - activeCargo.y) * robot.cycleProgress - Math.sin(robot.cycleProgress * Math.PI) * 28
+        }
+      : null;
+
   return (
     <section className="panel floor-panel">
       <div className="panel__header">
         <div>
           <p className="eyebrow">Digital Twin</p>
-          <h3>Realtime Rail and Palletizer View</h3>
+          <h3>Process Map by Zone</h3>
         </div>
-        <span className="panel__pill">2D Flow</span>
+        <span className="panel__pill">{focusedLine === "ALL" ? "Whole Plant" : `${focusedLine} zoom`}</span>
       </div>
 
       <div className="floor-canvas">
-        <svg viewBox="0 0 980 520" role="img" aria-label="Production virtualizer floor map">
+        <svg viewBox={focusViewBoxes[focusedLine]} role="img" aria-label="Production virtualizer process map">
           <defs>
-            <linearGradient id="floorGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <linearGradient id="floorGradient" x1="0%" y1="0%" x2="100%" y2="100%">
               <stop offset="0%" stopColor="#16324c" />
-              <stop offset="100%" stopColor="#0b1728" />
+              <stop offset="100%" stopColor="#07111d" />
             </linearGradient>
-            <radialGradient id="palletGlow" cx="50%" cy="50%" r="55%">
-              <stop offset="0%" stopColor="#ffd166" stopOpacity="0.65" />
+            <radialGradient id="stackGlow" cx="50%" cy="45%" r="62%">
+              <stop offset="0%" stopColor="#ffd166" stopOpacity="0.28" />
               <stop offset="100%" stopColor="#ffd166" stopOpacity="0" />
             </radialGradient>
           </defs>
 
-          <rect x="0" y="0" width="980" height="520" rx="28" fill="url(#floorGlow)" />
-          <rect x="54" y="86" width="588" height="322" rx="24" fill="rgba(10,22,35,0.38)" stroke="#20364f" />
+          <rect x="0" y="0" width="1180" height="560" rx="28" fill="url(#floorGradient)" />
+          <rect x="20" y="22" width="1140" height="516" rx="26" fill="rgba(6, 15, 26, 0.22)" stroke="rgba(126, 166, 205, 0.18)" />
 
-          {railSegments.map((segment) => (
-            <g key={segment.id}>
-              <rect
-                x={segment.x}
-                y={segment.y}
-                width={segment.width}
-                height={segment.height}
-                rx="16"
-                fill="#102033"
-                stroke={segmentColor[segment.status]}
-                strokeWidth="3"
-              />
-              <text x={segment.x + 18} y={segment.y + 29} fill="#d9e8f5" fontSize="15" fontWeight="600">
-                {segment.label}
-              </text>
-            </g>
-          ))}
+          {processZones.map((zone) => {
+            const tone = zoneToneMap[zone.tone];
+            return (
+              <g key={zone.id}>
+                <rect x={zone.x} y={zone.y} width={zone.width} height={zone.height} rx="26" fill={tone.fill} stroke={tone.stroke} strokeWidth="2.5" />
+                <text x={zone.x + 22} y={zone.y + 28} fill="#f1f6fb" fontSize="20" fontWeight="700">
+                  {zone.label}
+                </text>
+                <text x={zone.x + 22} y={zone.y + 50} fill="#9cb9d2" fontSize="12">
+                  {zone.description}
+                </text>
+              </g>
+            );
+          })}
 
-          {["L1", "L2", "L3", "L4", "L5", "L6", "L7"].map((line, index) => (
-            <g key={line}>
-              <text x="58" y={118 + index * 44} fill="#8cb4d6" fontSize="13" fontWeight="700">
+          {Object.entries(lineLabelY).map(([line, y]) => (
+            <g key={line} opacity={isLineVisible(line, focusedLine) ? 1 : 0.16}>
+              <text x="64" y={y} fill="#b7d2ea" fontSize="14" fontWeight="700">
                 {line}
               </text>
-              <line
-                x1="80"
-                y1={132 + index * 44}
-                x2="608"
-                y2={132 + index * 44}
-                stroke="#234160"
-                strokeWidth="4"
-                strokeLinecap="round"
-              />
+              <line x1="98" y1={y - 4} x2="630" y2={y - 4} stroke={focusedLine === line ? "#7dd3c4" : "#284863"} strokeWidth={focusedLine === line ? "6" : "4"} strokeLinecap="round" />
             </g>
           ))}
 
-          {trackNodes.map((node) => (
-            <g key={node.deviceCode}>
-              <rect
-                x={node.x}
-                y={node.y}
-                width={node.kind === "inspection" ? 44 : 36}
-                height={node.kind === "inspection" ? 22 : 16}
-                rx="6"
-                fill={node.kind === "inspection" ? "#17324d" : "#102033"}
-                stroke={node.kind === "inspection" ? "#ffd166" : "#36597d"}
-              />
-              <text
-                x={node.x + (node.kind === "inspection" ? 22 : 18)}
-                y={node.y - 6}
-                fill="#7f9ab2"
-                fontSize="10"
-                textAnchor="middle"
-              >
-                {node.deviceCode}
-              </text>
-            </g>
-          ))}
+          {trackNodes.map((node) => {
+            const active = isLineVisible(node.line, focusedLine);
+            const width = node.kind === "inspection" ? 54 : 34;
+            const height = node.kind === "inspection" ? 24 : 18;
+            return (
+              <g key={node.deviceCode} opacity={active ? 1 : 0.14}>
+                <rect
+                  x={node.x}
+                  y={node.y}
+                  width={width}
+                  height={height}
+                  rx="6"
+                  fill={node.kind === "inspection" ? "#172f48" : "#102033"}
+                  stroke={node.kind === "inspection" ? "#ffd166" : "#406586"}
+                />
+                <text x={node.x + width / 2} y={node.y - 8} fill="#7f9ab2" fontSize="10" textAnchor="middle">
+                  {node.deviceCode}
+                </text>
+              </g>
+            );
+          })}
 
           <g>
-            <rect x="615" y="165" width="235" height="230" rx="28" fill="#13263d" stroke="#2d4b6f" strokeWidth="3" />
-            <text x="644" y="198" fill="#f5f8fb" fontSize="19" fontWeight="700">
-              Robotic Palletizer
+            <rect x="912" y="126" width="178" height="42" rx="18" fill="#12253b" stroke="#4c759c" />
+            <text x="930" y="152" fill="#dbe8f4" fontSize="14" fontWeight="700">
+              Robot pick corridor
             </text>
-            <circle cx="770" cy="348" r="68" fill="url(#palletGlow)" />
-            <rect x="724" y="306" width="92" height="92" rx="10" fill="#4f6583" stroke="#dce7f3" strokeDasharray="6 6" />
-            <text x="738" y="422" fill="#dce7f3" fontSize="14">
-              PALLET ZONE
+            <rect x="912" y="215" width="178" height="42" rx="18" fill="#13263d" stroke="#4f78b6" />
+            <text x="930" y="241" fill="#dbe8f4" fontSize="14" fontWeight="700">
+              Precision place corridor
             </text>
           </g>
 
           <g>
-            <circle cx={robot.armX} cy={robot.armY} r="22" fill="#f25f5c" />
-            <rect
-              x={robot.armX - 10}
-              y={robot.armY - 86}
-              width="20"
-              height="86"
-              rx="10"
-              fill="#c3d7eb"
-              transform={`rotate(${16 - robot.cycleProgress * 30} ${robot.armX} ${robot.armY})`}
-            />
-            <circle cx="716" cy="176" r="30" fill="#27435f" stroke="#dce7f3" strokeWidth="3" />
+            <circle cx="1004" cy="268" r="86" fill="url(#stackGlow)" />
+            <rect x="928" y="212" width="162" height="132" rx="24" fill="rgba(10, 22, 35, 0.78)" stroke="#7395bf" strokeWidth="2.5" />
+            <text x="946" y="202" fill="#eef6ff" fontSize="14" fontWeight="700">
+              Pallet target coordinates
+            </text>
+            <rect x="936" y="220" width="146" height="116" rx="14" fill="#23384d" stroke="#dce7f3" strokeDasharray="6 6" />
+
+            {layers.flatMap((layer) =>
+              layer.cells
+                .filter((cell) => cell.filled)
+                .map((cell) => {
+                  const offset = getPalletOffset(layer.layer);
+                  return (
+                    <g key={`${layer.layer}-${cell.row}-${cell.col}`}>
+                      <rect
+                        x={cell.x + offset.x}
+                        y={cell.y - offset.y}
+                        width="38"
+                        height="38"
+                        rx="8"
+                        fill={cell.color}
+                        stroke="rgba(255,255,255,0.65)"
+                        strokeWidth="2"
+                      />
+                      <text x={cell.x + offset.x + 19} y={cell.y - offset.y + 24} fill="#08111c" fontSize="11" fontWeight="700" textAnchor="middle">
+                        {cell.slotLabel}
+                      </text>
+                    </g>
+                  );
+                })
+            )}
+
+            {nextTargetCell ? (
+              <g>
+                <rect
+                  x={nextTargetCell.renderX}
+                  y={nextTargetCell.renderY}
+                  width="38"
+                  height="38"
+                  rx="8"
+                  fill="rgba(255, 209, 102, 0.12)"
+                  stroke="#ffd166"
+                  strokeWidth="2.5"
+                  strokeDasharray="6 5"
+                />
+                <text x={nextTargetCell.renderX + 19} y={nextTargetCell.renderY - 10} fill="#ffd166" fontSize="12" textAnchor="middle">
+                  next L{nextTargetCell.layer}-{nextTargetCell.slotLabel}
+                </text>
+              </g>
+            ) : null}
+          </g>
+
+          <g>
+            <circle cx="1004" cy="148" r="22" fill="#244057" stroke="#dce7f3" strokeWidth="3" />
+            <line x1="1004" y1="148" x2={robot.armX} y2={robot.armY} stroke="#d7e6f3" strokeWidth="10" strokeLinecap="round" />
+            <line x1="1004" y1="148" x2={robot.armX} y2={robot.armY} stroke="#607e9a" strokeWidth="4" strokeLinecap="round" />
+            <circle cx={robot.armX} cy={robot.armY} r="18" fill="#f25f5c" style={{ transitionDuration }} />
+            <circle cx={robot.armX} cy={robot.armY} r="7" fill="#ffe9d0" style={{ transitionDuration }} />
           </g>
 
           {cargos.map((cargo) => {
-            const segment = railSegments[cargo.segmentIndex];
-            const x = cargo.x ?? segment.x + 18 + cargo.progress * (segment.width - 44);
-            const y = cargo.y ?? segment.y + 10;
-
+            const visible = focusedLine === "ALL" || cargo.line === focusedLine || (focusedLine === "QC" && cargo.line === "QC");
             return (
-              <g key={cargo.id}>
-                <rect x={x} y={y} width="26" height="26" rx="7" fill={cargo.color} stroke="#fdfdfd" strokeWidth="2" />
-                <text x={x - 3} y={y + 43} fill="#dce7f3" fontSize="12">
+              <g key={cargo.id} opacity={visible ? 1 : 0.14} style={{ transitionDuration }}>
+                <rect
+                  x={cargo.x}
+                  y={cargo.y}
+                  width="24"
+                  height="24"
+                  rx="7"
+                  fill={cargo.color}
+                  stroke="#fdfdfd"
+                  strokeWidth="2"
+                  style={{ transitionDuration }}
+                />
+                <text x={(cargo.x ?? 0) - 2} y={(cargo.y ?? 0) + 38} fill="#dce7f3" fontSize="11">
                   {cargo.id}
                 </text>
                 {cargo.sourceDeviceCode ? (
-                  <text x={x - 1} y={y + 56} fill="#7dd3c4" fontSize="10">
+                  <text x={(cargo.x ?? 0) - 1} y={(cargo.y ?? 0) + 51} fill="#7dd3c4" fontSize="10">
                     {cargo.sourceDeviceCode}
                   </text>
                 ) : null}
@@ -143,14 +248,47 @@ export function FloorView({ cargos, robot }: FloorViewProps) {
             );
           })}
 
+          {trackingCargoPosition && activeCargo ? (
+            <g style={{ transitionDuration }}>
+              <rect x={trackingCargoPosition.x} y={trackingCargoPosition.y} width="24" height="24" rx="7" fill={activeCargo.color} stroke="#ffffff" strokeWidth="2" />
+              <text x={trackingCargoPosition.x - 10} y={trackingCargoPosition.y - 10} fill="#9be7db" fontSize="11">
+                robot pickup
+              </text>
+            </g>
+          ) : null}
+
+          {placingCargoPosition && activeCargo ? (
+            <g style={{ transitionDuration }}>
+              <rect x={placingCargoPosition.x} y={placingCargoPosition.y} width="24" height="24" rx="7" fill={activeCargo.color} stroke="#ffffff" strokeWidth="2" />
+              <text x={placingCargoPosition.x - 6} y={placingCargoPosition.y - 12} fill="#ffd166" fontSize="11">
+                place path
+              </text>
+            </g>
+          ) : null}
+
+          {outboundDocks.map((dock, index) => (
+            <g key={dock.id}>
+              <rect x={dock.x} y={dock.y} width={dock.width} height={dock.height} rx="12" fill="#1e2936" stroke="#ff9c8f" />
+              <text x={dock.x + 12} y={dock.y + 26} fill="#f6e2de" fontSize="12" fontWeight="700">
+                Dock {index + 1}
+              </text>
+            </g>
+          ))}
+
           <g>
-            <text x="70" y="74" fill="#eff6fc" fontSize="28" fontWeight="700">
-              Live Buffer and Inspection Flow
+            <text x="54" y="58" fill="#eff6fc" fontSize="30" fontWeight="700">
+              Rail, inspection, stacking, and outbound flow
             </text>
-            <text x="70" y="98" fill="#8cb4d6" fontSize="14">
-              core device codes 24301-24934 mapped to on-screen rail slots and palletizer handoff
+            <text x="54" y="78" fill="#8cb4d6" fontSize="14">
+              Core track codes feed a zone-based digital twin with line zoom and exact pallet placement targets.
             </text>
           </g>
+
+          {palletCellAnchors.map((anchor) => (
+            <text key={`slot-${anchor.slotLabel}`} x={anchor.x + 19} y={anchor.y + 54} fill="#66839d" fontSize="10" textAnchor="middle">
+              {anchor.slotLabel}
+            </text>
+          ))}
         </svg>
       </div>
     </section>

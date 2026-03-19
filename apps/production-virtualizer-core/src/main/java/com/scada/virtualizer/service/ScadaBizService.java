@@ -151,6 +151,27 @@ public class ScadaBizService {
         printCurrentAllLinesStatus();
     }
 
+    private boolean rareChance(int denominator) {
+        return ThreadLocalRandom.current().nextInt(denominator) == 0;
+    }
+
+    private int randomBetween(int minInclusive, int maxInclusive) {
+        return ThreadLocalRandom.current().nextInt(minInclusive, maxInclusive + 1);
+    }
+
+    private int pickRobotOrderCount() {
+        List<Integer> candidates = List.of(36, 48, 60, 72);
+        return candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+    }
+
+    private int pickBmOrderCount() {
+        return randomBetween(42, 68);
+    }
+
+    private int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
 
     public void lPlc01Process(){
         List<String> cfgCodeList = new ArrayList<>(List.of("LPLC_01O", "LPLC_01C"));
@@ -1065,92 +1086,76 @@ public class ScadaBizService {
 
     @Scheduled(fixedDelay = 3000)
     public void setPalletizerInfo() {
-        log.info("팔레타이저 랜던값 생성");
+        log.info("팔레타이저 시뮬레이션 갱신");
         try {
             for (int i = 1; i < 3; i++) {
-                List<PropPltzInfo> newPropPltzInfos = new ArrayList<>();
                 int finalI = i;
-                PropPltzInfo oldObjectInfo = this.propPltzInfos.stream().filter(h -> h.getRobotNo() == finalI).findFirst().orElse(null);
-                if (oldObjectInfo == null)
+                PropPltzInfo robotInfo = this.propPltzInfos.stream().filter(h -> h.getRobotNo() == finalI).findFirst().orElse(null);
+                if (robotInfo == null) {
                     return;
-                boolean robotReadyStatus = false;
+                }
 
-                int loadingLine = ThreadLocalRandom.current().nextInt(1, 4); // 1~3 포함
-                int unloadingLine = ThreadLocalRandom.current().nextInt(1, 5); // 1~4 포함
-                int mboxCd = ThreadLocalRandom.current().nextInt(1, 15); // 1~14 포함
+                if ("0000".equals(robotInfo.getWorkId()) || (robotInfo.isReady() && rareChance(3))) {
+                    int totalOrderCount = pickRobotOrderCount();
+                    robotInfo.setWorkId(HexRandom());
+                    robotInfo.setLoadingLine(randomBetween(1, 3));
+                    robotInfo.setUnLoadingLine(randomBetween(1, 4));
+                    robotInfo.setUnLoadingPosition(randomBetween(1, 9));
+                    robotInfo.setHeightCode(randomBetween(1, 3));
+                    robotInfo.setTotalOrderCount(totalOrderCount);
+                    robotInfo.setMBoxCd(randomBetween(1, 14));
+                    robotInfo.setLoadingLine1WorkId(HexRandom());
+                    robotInfo.setLoadingLine2WorkId(HexRandom());
+                    robotInfo.setLoadingLine3WorkId(HexRandom());
+                    robotInfo.setTotalRt1Count(0);
+                    robotInfo.setTotalRt2Count(0);
+                    robotInfo.setTotalRt3Count(0);
+                    robotInfo.setTotalRt4Count(0);
+                    robotInfo.setStatusCode(1);
+                    robotInfo.setMotionCode(1);
+                    robotInfo.setErrorCode(0);
+                    robotInfo.setReady(false);
+                    robotInfo.setDecDataList(Map.of(1, 0, 2, 0, 3, 0));
+                    continue;
+                }
 
-                List<Integer> candidates = List.of(24, 36, 48, 60);
-                int totalOrderCount = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+                int totalOrderCount = Math.max(robotInfo.getTotalOrderCount(), 36);
+                int processedCount = robotInfo.getTotalRt4Count();
+                int remaining = Math.max(0, totalOrderCount - processedCount);
+                int increment = remaining == 0 ? 0 : (rareChance(5) ? 0 : randomBetween(1, Math.min(3, remaining)));
 
-                int totalRt1Count = ThreadLocalRandom.current().nextInt(1, 24); // 1~24 포함
-                int totalRt2Count = ThreadLocalRandom.current().nextInt(1, 24); // 1~24 포함
-                int totalRt3Count = ThreadLocalRandom.current().nextInt(1, 24); // 1~24 포함
+                if (increment > 0) {
+                    int phase = processedCount % 3;
+                    if (phase == 0) {
+                        robotInfo.setTotalRt1Count(clamp(robotInfo.getTotalRt1Count() + increment, 0, totalOrderCount));
+                        robotInfo.setMotionCode(1);
+                    } else if (phase == 1) {
+                        robotInfo.setTotalRt2Count(clamp(robotInfo.getTotalRt2Count() + increment, 0, totalOrderCount));
+                        robotInfo.setMotionCode(2);
+                    } else {
+                        robotInfo.setTotalRt3Count(clamp(robotInfo.getTotalRt3Count() + increment, 0, totalOrderCount));
+                        robotInfo.setMotionCode(3);
+                    }
+                    robotInfo.setTotalRt4Count(clamp(processedCount + increment, 0, totalOrderCount));
+                } else {
+                    robotInfo.setMotionCode(4);
+                }
 
-                newPropPltzInfos.add(
-                        PropPltzInfo.builder()
-                                .robotNo(i)
-                                .workId(HexRandom())
-                                .loadingLine(loadingLine)
-                                .unLoadingLine(unloadingLine)
-                                .totalOrderCount(totalOrderCount)
-                                .mBoxCd(mboxCd)
-                                .loadingLine1WorkId(HexRandom())
-                                .loadingLine2WorkId(HexRandom())
-                                .loadingLine3WorkId(HexRandom())
-                                .totalRt1Count(totalRt1Count)
-                                .totalRt2Count(totalRt2Count)
-                                .totalRt3Count(totalRt3Count)
-                                .statusCode(1)
-                                .errorCode(0)
-                                .ready(robotReadyStatus)
-                                .build()
-                );
-                // 변경 대상 추출
-                List<PropPltzInfo> changeInfos = newPropPltzInfos.stream().filter(cur ->
-                        this.propPltzInfos.stream().noneMatch(
-                                old -> old.getRobotNo() == cur.getRobotNo()
-                                        && old.getLoadingLine() == cur.getLoadingLine()
-                                        && old.getUnLoadingLine() == cur.getUnLoadingLine()
-                                        && old.getTotalOrderCount() == cur.getTotalOrderCount()
-                                        && old.getStatusCode() == cur.getStatusCode()
-                                        && old.getErrorCode() == cur.getErrorCode()
-                                        && Objects.equals(old.getLoadingLine1WorkId(), cur.getLoadingLine1WorkId())
-                                        && Objects.equals(old.getLoadingLine2WorkId(), cur.getLoadingLine2WorkId())
-                                        && Objects.equals(old.getLoadingLine3WorkId(), cur.getLoadingLine3WorkId())
-                                        && old.getTotalRt1Count() == cur.getTotalRt1Count()
-                                        && old.getTotalRt2Count() == cur.getTotalRt2Count()
-                                        && old.getTotalRt3Count() == cur.getTotalRt3Count()
-                                        && old.getTotalRt4Count() == cur.getTotalRt4Count()
-                                        && old.isReady() == cur.isReady()
-                                        && old.getWorkId().equals(cur.getWorkId())
-                        )
-                ).toList();
+                if (rareChance(900)) {
+                    robotInfo.setErrorCode(100 + robotInfo.getRobotNo());
+                    robotInfo.setStatusCode(3);
+                } else {
+                    robotInfo.setErrorCode(0);
+                    robotInfo.setStatusCode(robotInfo.getTotalRt4Count() >= totalOrderCount ? 2 : 1);
+                }
 
-                // 변경 정보 기재
-                if (!changeInfos.isEmpty()) {
-                    this.propPltzInfos.stream().filter(old -> changeInfos.stream().anyMatch(changed -> old.getRobotNo() == changed.getRobotNo())
-                    ).forEach(h -> {
-
-                        PropPltzInfo changeInfo = changeInfos.stream().filter(changed -> h.getRobotNo() == changed.getRobotNo()).findFirst().orElse(null);
-                        if (changeInfo != null) {
-
-                            h.setLoadingLine(changeInfo.getLoadingLine());              //etc1      LD위치
-                            h.setUnLoadingLine(changeInfo.getUnLoadingLine());          //etc2
-                            h.setUnLoadingPosition(changeInfo.getUnLoadingPosition());  //etc3
-                            h.setHeightCode(changeInfo.getHeightCode());                //etc4
-                            h.setTotalOrderCount(changeInfo.getTotalOrderCount());      //etc5
-                            h.setStatusCode(changeInfo.getStatusCode());                //etc6
-                            h.setMotionCode(changeInfo.getMotionCode());                //etc7
-                            h.setErrorCode(changeInfo.getErrorCode());                  //etc8
-                            h.setTotalRt1Count(changeInfo.getTotalRt1Count());          //etc9
-                            h.setTotalRt2Count(changeInfo.getTotalRt2Count());          //etc10
-                            h.setTotalRt3Count(changeInfo.getTotalRt3Count());          //etc11
-                            h.setTotalRt4Count(changeInfo.getTotalRt4Count());          //etc12
-                            h.setReady(changeInfo.isReady());                           //etc13
-                            h.setDecDataList(changeInfo.getDecDataList());              //etc14
-                            h.setWorkId(changeInfo.getWorkId());
-                        }
-                    });
+                if (robotInfo.getTotalRt4Count() >= totalOrderCount) {
+                    robotInfo.setTotalRt4Count(totalOrderCount);
+                    robotInfo.setMotionCode(5);
+                    robotInfo.setStatusCode(2);
+                    robotInfo.setReady(true);
+                } else {
+                    robotInfo.setReady(false);
                 }
             }
 
@@ -1158,47 +1163,65 @@ public class ScadaBizService {
             log.error("{}", e, e);
         }
 
-        log.info("팔레타이저 랜던값 종료");
+        log.info("팔레타이저 시뮬레이션 종료");
     }
 
     @Scheduled(fixedDelay = 2000)
     public void setAmpRobotInfo() {
-        log.info("대포장 설비 프로세스 시작 : {}",this.eqApmStatus);
-        if(this.eqApmStatus.getWorkId().equals("0")){
-            // 초기 값 셋팅
-            List<Integer> candidates = List.of(27, 36, 45, 54, 63, 72, 81); // 9개 씩 쌓임 3층 부터 9층까지
-            int totalOrderCount = candidates.get(ThreadLocalRandom.current().nextInt(candidates.size()));
+        log.info("대포장 설비 프로세스 시작 : {}", this.eqApmStatus);
+        if (this.eqApmStatus.getWorkId().equals("0")) {
+            int totalOrderCount = this.propPltzInfos.stream()
+                    .filter(info -> !Objects.equals(info.getWorkId(), "0000"))
+                    .map(PropPltzInfo::getTotalOrderCount)
+                    .findFirst()
+                    .orElse(pickRobotOrderCount());
 
-            this.eqApmStatus = EqApmStatus
-                            .builder().workId(HexRandom())
-                            .inputStatus("0")
-                            .layer(String.valueOf(totalOrderCount/9))
-                            .status("0000")
-                            .orderQty(String.valueOf(totalOrderCount))
-                            .placeProcess("0") // 대기(0), 진행(1), 완료(2)
-                            .process("0") // 대기(0), 진행(1), 정상완료(2), 강제완료(3)
+            this.eqApmStatus = EqApmStatus.builder()
+                    .workId(HexRandom())
+                    .inputStatus("0")
+                    .layer(String.valueOf(Math.max(3, totalOrderCount / 9)))
+                    .status("0000")
+                    .orderQty(String.valueOf(totalOrderCount))
+                    .placeProcess("0")
+                    .process("0")
+                    .completeQty("0")
+                    .build();
+        } else {
+            int orderQty = Integer.parseInt(this.eqApmStatus.getOrderQty());
+            int completeQty = Integer.parseInt(this.eqApmStatus.getCompleteQty());
+
+            if (completeQty >= orderQty) {
+                if ("2".equals(this.eqApmStatus.getProcess())) {
+                    this.eqApmStatus = EqApmStatus.builder()
+                            .workId("0")
+                            .inputStatus("1")
+                            .layer("0")
+                            .status("0")
+                            .orderQty("0")
+                            .placeProcess("0")
+                            .process("0")
                             .completeQty("0")
                             .build();
-        } else {
-            if(this.eqApmStatus.getOrderQty().equals(this.eqApmStatus.getCompleteQty())){
-                this.eqApmStatus = EqApmStatus
-                                .builder().workId("0")
-                                .inputStatus("1")
-                                .layer("0")
-                                .status("0")
-                                .orderQty("0")
-                                .placeProcess("0")
-                                .process("0")
-                                .completeQty("0")
-                                .build();
-            } else { // 3개씩 더하기
-                this.eqApmStatus.setCompleteQty(String.valueOf(Integer.parseInt(this.eqApmStatus.getCompleteQty()) + 3));
+                } else {
+                    this.eqApmStatus.setCompleteQty(String.valueOf(orderQty));
+                    this.eqApmStatus.setInputStatus("1");
+                    this.eqApmStatus.setProcess("2");
+                    this.eqApmStatus.setPlaceProcess("2");
+                    this.eqApmStatus.setStatus("0002");
+                }
+            } else {
+                int remaining = orderQty - completeQty;
+                int step = rareChance(6) ? 0 : Math.min(remaining, rareChance(4) ? 6 : 3);
+                int nextCompleteQty = Math.min(orderQty, completeQty + step);
+
+                this.eqApmStatus.setCompleteQty(String.valueOf(nextCompleteQty));
                 this.eqApmStatus.setInputStatus("0");
-                this.eqApmStatus.setProcess("1");
-                this.eqApmStatus.setPlaceProcess("1");
+                this.eqApmStatus.setProcess(nextCompleteQty >= orderQty ? "2" : "1");
+                this.eqApmStatus.setPlaceProcess(nextCompleteQty >= orderQty ? "2" : step == 0 ? "0" : "1");
+                this.eqApmStatus.setStatus(nextCompleteQty >= orderQty ? "0002" : "0001");
             }
         }
-        log.info("대포장 설비 프로세스 완료 : {}",this.eqApmStatus);
+        log.info("대포장 설비 프로세스 완료 : {}", this.eqApmStatus);
     }
 
     public String HexRandom() {
@@ -1212,7 +1235,6 @@ public class ScadaBizService {
     @Scheduled(fixedDelay = 1500)
     public void setBmStatus() {
         log.info("제함기 상태값 공유 프로세스 시작");
-        Random random = new Random();
         for (String deviceCode : this.bmDeviceCodeList) {
             BmStatus bmStatus = this.bmStatusMap.get(deviceCode);
             if (bmStatus == null) {
@@ -1230,51 +1252,56 @@ public class ScadaBizService {
                         .build());
             } else {
                 if (bmStatus.getProcessCode().equals("0")) {
-                    int[] values = {20, 21, 22, 23};
-
-                    String processCode = "1";
-                    int mBoxCd = values[random.nextInt(values.length)];
-                    int orderQty = random.nextInt(31) + 30;
-                    int compQty = 0;
-                    int labelCompQty = 0;
-
-                    bmStatus.setProcessCode(processCode);
-                    bmStatus.setMBoxCd(mBoxCd);
-                    bmStatus.setOrderQty(orderQty);
-                    bmStatus.setCompQty(compQty);
-                    bmStatus.setLabelCompQty(labelCompQty);
-                    bmStatus.setWorkId(HexRandom());
+                    if (rareChance(4)) {
+                        int[] values = {20, 21, 22, 23};
+                        bmStatus.setProcessCode("1");
+                        bmStatus.setStatus("1");
+                        bmStatus.setStatusCode("1001");
+                        bmStatus.setMBoxCd(values[ThreadLocalRandom.current().nextInt(values.length)]);
+                        bmStatus.setOrderQty(pickBmOrderCount());
+                        bmStatus.setCompQty(0);
+                        bmStatus.setLabelCompQty(0);
+                        bmStatus.setWorkId(HexRandom());
+                    }
                 } else if (bmStatus.getProcessCode().equals("1")) {
-                    if (random.nextInt(2) == 0){
-                        int compQty = bmStatus.getCompQty() + 1;
-                        int labelCompQty = bmStatus.getLabelCompQty() + 1;
-
-                        bmStatus.setCompQty(compQty);
-                        bmStatus.setLabelCompQty(labelCompQty);
+                    int increment = rareChance(5) ? 0 : randomBetween(1, 2);
+                    if (increment > 0) {
+                        bmStatus.setCompQty(Math.min(bmStatus.getOrderQty(), bmStatus.getCompQty() + increment));
+                        bmStatus.setLabelCompQty(Math.min(bmStatus.getOrderQty(), bmStatus.getLabelCompQty() + increment));
                     }
 
-                    if (random.nextInt(100) == 0)
+                    if (bmStatus.getCompQty() >= bmStatus.getOrderQty()) {
+                        bmStatus.setCompQty(bmStatus.getOrderQty());
+                        bmStatus.setLabelCompQty(bmStatus.getOrderQty());
+                        bmStatus.setProcessCode("4");
+                        bmStatus.setStatus("2");
+                        bmStatus.setStatusCode("0002");
+                    } else if (rareChance(450)) {
                         bmStatus.setProcessCode("5"); // 취소
-
-                    if (bmStatus.getOrderQty() == bmStatus.getCompQty())
-                        bmStatus.setProcessCode("4"); // 완료
-
+                        bmStatus.setStatus("5");
+                        bmStatus.setStatusCode("9001");
+                    } else {
+                        bmStatus.setStatus("1");
+                        bmStatus.setStatusCode("1001");
+                    }
                 } else {
-                    this.bmStatusMap.put(deviceCode, BmStatus
-                                                .builder()
-                                                .workId("0")
-                                                .statusCode("0")
-                                                .status("0")
-                                                .compQty(0)
-                                                .processCode("0")
-                                                .labelCompQty(0)
-                                                .mBoxCd(0)
-                                                .orderQty(0)
-                                                .deviceCode(deviceCode)
-                                                .build());
+                    if (rareChance(3)) {
+                        this.bmStatusMap.put(deviceCode, BmStatus
+                                .builder()
+                                .workId("0")
+                                .statusCode("0")
+                                .status("0")
+                                .compQty(0)
+                                .processCode("0")
+                                .labelCompQty(0)
+                                .mBoxCd(0)
+                                .orderQty(0)
+                                .deviceCode(deviceCode)
+                                .build());
+                    }
                 }
 
-                log.info("제함기 상태값 변경 [DEVICE_CODE : {}] [BM_STATUS : {}] ",deviceCode,bmStatus);
+                log.info("제함기 상태값 변경 [DEVICE_CODE : {}] [BM_STATUS : {}] ", deviceCode, bmStatus);
 
             }
         }

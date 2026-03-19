@@ -34,7 +34,9 @@ export function PalletStackPanel({ layers }: PalletStackPanelProps) {
                     className={cell.filled ? "pallet-grid__cell is-filled" : "pallet-grid__cell"}
                     style={cell.filled && cell.color ? { background: cell.color } : undefined}
                     title={cell.cargoId ?? "Empty"}
-                  />
+                  >
+                    <span>{cell.slotLabel}</span>
+                  </div>
                 ))}
               </div>
             </article>

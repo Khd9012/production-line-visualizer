@@ -6,6 +6,7 @@ import { DetailPanel } from "./components/DetailPanel";
 import { EventTimeline } from "./components/EventTimeline";
 import { FloorView } from "./components/FloorView";
 import { PalletStackPanel } from "./components/PalletStackPanel";
+import { ProcessControls } from "./components/ProcessControls";
 import { RobotFleetPanel } from "./components/RobotFleetPanel";
 import { StatCard } from "./components/StatCard";
 import { useSimulationStore } from "./store/simulationStore";
@@ -18,6 +19,8 @@ export default function App() {
     throughput,
     activeRecipe,
     selectedPanel,
+    focusedLine,
+    playbackSpeed,
     events,
     connectionStatus,
     databaseAlive,
@@ -28,6 +31,8 @@ export default function App() {
     apmStatus,
     tick,
     setSelectedPanel,
+    setFocusedLine,
+    setPlaybackSpeed,
     setConnectionStatus,
     setDatabaseAlive,
     setSchedulerSummary,
@@ -38,10 +43,10 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       tick();
-    }, 1400);
+    }, Math.max(300, Math.round(1200 / playbackSpeed)));
 
     return () => window.clearInterval(timer);
-  }, [tick]);
+  }, [playbackSpeed, tick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,10 +85,10 @@ export default function App() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       void fetchSimulationSnapshot().then(ingestSimulationSnapshot).catch(() => undefined);
-    }, 3000);
+    }, Math.max(1500, Math.round(3200 / playbackSpeed)));
 
     return () => window.clearInterval(timer);
-  }, [ingestSimulationSnapshot]);
+  }, [ingestSimulationSnapshot, playbackSpeed]);
 
   useEffect(() => {
     setConnectionStatus("connecting");
@@ -122,6 +127,7 @@ export default function App() {
         <StatCard label="Current Throughput" value={`${throughput} bx/h`} meta="hybrid sim + core feed" tone="accent" />
         <StatCard label="Robot Cycle" value={`${Math.round(robot.cycleProgress * 100)}%`} meta={robot.mode} />
         <StatCard label="Active Cargo" value={leadCargo?.id ?? "None"} meta={leadCargo?.state ?? "idle"} />
+        <StatCard label="Focused Line" value={focusedLine} meta={`playback ${playbackSpeed}x`} />
         <StatCard
           label="Realtime Link"
           value={connectionStatus === "live" ? "ONLINE" : connectionStatus.toUpperCase()}
@@ -130,14 +136,23 @@ export default function App() {
         <StatCard label="Pallet Fill" value={`${totalStacked}/27`} meta="three-layer recipe" />
       </section>
 
+      <ProcessControls
+        focusedLine={focusedLine}
+        playbackSpeed={playbackSpeed}
+        onFocusChange={setFocusedLine}
+        onSpeedChange={setPlaybackSpeed}
+      />
+
       <section className="workspace-grid">
-        <FloorView cargos={cargos} robot={robot} />
+        <FloorView cargos={cargos} robot={robot} layers={palletLayers} focusedLine={focusedLine} playbackSpeed={playbackSpeed} />
         <DetailPanel
           activeRecipe={activeRecipe}
           robot={robot}
           leadCargo={leadCargo}
           layers={palletLayers}
           current={selectedPanel}
+          focusedLine={focusedLine}
+          playbackSpeed={playbackSpeed}
           connectionStatus={connectionStatus}
           databaseAlive={databaseAlive}
           schedulerSummary={schedulerSummary}

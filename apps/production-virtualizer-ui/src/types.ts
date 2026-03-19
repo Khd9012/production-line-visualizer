@@ -1,5 +1,9 @@
 export type CargoState = "queued" | "moving" | "buffered" | "picked" | "stacked";
 
+export type FocusLine = "ALL" | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "QC";
+
+export type PlaybackSpeed = 0.5 | 1 | 1.5 | 2;
+
 export type RailSegment = {
   id: string;
   label: string;
@@ -20,6 +24,13 @@ export type Cargo = {
   x?: number;
   y?: number;
   sourceDeviceCode?: string;
+  palletTarget?: {
+    layer: number;
+    row: number;
+    col: number;
+    x: number;
+    y: number;
+  };
 };
 
 export type PalletCell = {
@@ -28,6 +39,9 @@ export type PalletCell = {
   filled: boolean;
   color?: string;
   cargoId?: string;
+  x: number;
+  y: number;
+  slotLabel: string;
 };
 
 export type PalletLayer = {
@@ -75,6 +89,17 @@ export type TrackNode = {
   x: number;
   y: number;
   kind: "buffer" | "inspection";
+};
+
+export type ProcessZone = {
+  id: string;
+  label: string;
+  description: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  tone: "teal" | "amber" | "blue" | "rose";
 };
 
 export type CoreRobotInfo = {
