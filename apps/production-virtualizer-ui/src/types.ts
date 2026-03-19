@@ -1,4 +1,5 @@
 export type CargoState = "queued" | "moving" | "buffered" | "picked" | "stacked";
+export type CargoRailPhase = "mainline" | "branching" | "interceptor" | "inspection" | "pickup" | "placing";
 
 export type FocusLine = "ALL" | "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "QC";
 
@@ -19,6 +20,7 @@ export type Cargo = {
   segmentIndex: number;
   progress: number;
   line: string;
+  railPhase?: CargoRailPhase;
   state: CargoState;
   color: string;
   x?: number;
@@ -31,6 +33,7 @@ export type Cargo = {
     x: number;
     y: number;
   };
+  interceptorIndex?: number;
 };
 
 export type PalletCell = {

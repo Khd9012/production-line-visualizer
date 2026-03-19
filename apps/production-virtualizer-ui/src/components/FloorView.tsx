@@ -1,4 +1,4 @@
-import { focusViewBoxes, outboundDocks, palletCellAnchors, processZones, trackNodes } from "../data/layout";
+import { focusViewBoxes, lineBranchMap, mainRailPath, outboundDocks, palletCellAnchors, pickupAnchor, processZones, trackNodes } from "../data/layout";
 import type { Cargo, FocusLine, PalletLayer, PlaybackSpeed, RobotState } from "../types";
 
 type FloorViewProps = {
@@ -52,6 +52,7 @@ const getNextTargetCell = (layers: PalletLayer[]) => {
 };
 
 const isLineVisible = (line: string, focusedLine: FocusLine) => focusedLine === "ALL" || focusedLine === line;
+const mainRailPathD = `M ${mainRailPath.map((point) => `${point.x} ${point.y}`).join(" L ")}`;
 
 export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }: FloorViewProps) {
   const nextTargetCell = getNextTargetCell(layers);
@@ -123,9 +124,47 @@ export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }:
               <text x="64" y={y} fill="#b7d2ea" fontSize="14" fontWeight="700">
                 {line}
               </text>
-              <line x1="98" y1={y - 4} x2="630" y2={y - 4} stroke={focusedLine === line ? "#7dd3c4" : "#284863"} strokeWidth={focusedLine === line ? "6" : "4"} strokeLinecap="round" />
+              <line x1="250" y1={y - 4} x2="630" y2={y - 4} stroke={focusedLine === line ? "#7dd3c4" : "#284863"} strokeWidth={focusedLine === line ? "6" : "4"} strokeLinecap="round" />
             </g>
           ))}
+
+          <path d={mainRailPathD} fill="none" stroke="#5b7894" strokeWidth="18" strokeLinecap="round" strokeLinejoin="round" opacity="0.5" />
+          <path d={mainRailPathD} fill="none" stroke="#9ec6ea" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" opacity="0.7" />
+
+          {Object.entries(lineBranchMap)
+            .filter(([line]) => line !== "QC")
+            .map(([line, branch]) => {
+              const active = isLineVisible(line, focusedLine);
+              return (
+                <g key={line} opacity={active ? 1 : 0.12}>
+                  <path
+                    d={`M ${branch.splitX} 118 Q ${branch.splitX + 16} ${branch.mergeY - 22} ${branch.splitX + 42} ${branch.mergeY} L ${branch.interceptorX} ${branch.interceptorY}`}
+                    fill="none"
+                    stroke="#26435f"
+                    strokeWidth="14"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d={`M ${branch.splitX} 118 Q ${branch.splitX + 16} ${branch.mergeY - 22} ${branch.splitX + 42} ${branch.mergeY} L ${branch.interceptorX} ${branch.interceptorY}`}
+                    fill="none"
+                    stroke={focusedLine === line ? "#7dd3c4" : "#4f7593"}
+                    strokeWidth="3.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <rect x={branch.interceptorX - 16} y={branch.interceptorY - 14} width="28" height="28" rx="8" fill="rgba(15, 32, 49, 0.9)" stroke="#8eb2cf" />
+                  <text x={branch.interceptorX - 2} y={branch.interceptorY + 5} fill="#cfe2f3" fontSize="10" textAnchor="middle">
+                    I
+                  </text>
+                </g>
+              );
+            })}
+
+          <path d="M 748 132 L 748 414" fill="none" stroke="#4f6c8e" strokeWidth="16" strokeLinecap="round" opacity="0.4" />
+          <path d="M 748 132 L 748 414" fill="none" stroke="#ffd166" strokeWidth="4" strokeLinecap="round" opacity="0.82" />
+          <path d={`M 748 250 C 816 250, 848 210, ${pickupAnchor.x} ${pickupAnchor.y}`} fill="none" stroke="#6789ad" strokeWidth="10" strokeLinecap="round" opacity="0.5" />
+          <path d={`M 748 250 C 816 250, 848 210, ${pickupAnchor.x} ${pickupAnchor.y}`} fill="none" stroke="#8bb0d7" strokeWidth="3" strokeLinecap="round" opacity="0.8" />
 
           {trackNodes.map((node) => {
             const active = isLineVisible(node.line, focusedLine);
@@ -217,6 +256,10 @@ export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }:
             <circle cx="1004" cy="148" r="22" fill="#244057" stroke="#dce7f3" strokeWidth="3" />
             <line x1="1004" y1="148" x2={robot.armX} y2={robot.armY} stroke="#d7e6f3" strokeWidth="10" strokeLinecap="round" />
             <line x1="1004" y1="148" x2={robot.armX} y2={robot.armY} stroke="#607e9a" strokeWidth="4" strokeLinecap="round" />
+            <circle cx={pickupAnchor.x} cy={pickupAnchor.y} r="16" fill="#13263d" stroke="#9bc2e3" strokeWidth="2.5" />
+            <text x={pickupAnchor.x} y={pickupAnchor.y + 4} fill="#eef7ff" fontSize="10" textAnchor="middle">
+              PICK
+            </text>
             <circle cx={robot.armX} cy={robot.armY} r="18" fill="#f25f5c" style={{ transitionDuration }} />
             <circle cx={robot.armX} cy={robot.armY} r="7" fill="#ffe9d0" style={{ transitionDuration }} />
           </g>
@@ -244,6 +287,11 @@ export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }:
                     {cargo.sourceDeviceCode}
                   </text>
                 ) : null}
+                {cargo.interceptorIndex ? (
+                  <text x={(cargo.x ?? 0) + 12} y={(cargo.y ?? 0) - 10} fill="#ffcf7e" fontSize="10" textAnchor="middle">
+                    Z{cargo.interceptorIndex}
+                  </text>
+                ) : null}
               </g>
             );
           })}
@@ -252,7 +300,7 @@ export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }:
             <g style={{ transitionDuration }}>
               <rect x={trackingCargoPosition.x} y={trackingCargoPosition.y} width="24" height="24" rx="7" fill={activeCargo.color} stroke="#ffffff" strokeWidth="2" />
               <text x={trackingCargoPosition.x - 10} y={trackingCargoPosition.y - 10} fill="#9be7db" fontSize="11">
-                robot pickup
+                pickup delay
               </text>
             </g>
           ) : null}
@@ -261,7 +309,7 @@ export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }:
             <g style={{ transitionDuration }}>
               <rect x={placingCargoPosition.x} y={placingCargoPosition.y} width="24" height="24" rx="7" fill={activeCargo.color} stroke="#ffffff" strokeWidth="2" />
               <text x={placingCargoPosition.x - 6} y={placingCargoPosition.y - 12} fill="#ffd166" fontSize="11">
-                place path
+                staged placement
               </text>
             </g>
           ) : null}
@@ -280,7 +328,7 @@ export function FloorView({ cargos, robot, layers, focusedLine, playbackSpeed }:
               Rail, inspection, stacking, and outbound flow
             </text>
             <text x="54" y="78" fill="#8cb4d6" fontSize="14">
-              Core track codes feed a zone-based digital twin with line zoom and exact pallet placement targets.
+              Main infeed rail branches into interceptor zones, then verified cargo is staged before a slower palletizer place cycle.
             </text>
           </g>
 
