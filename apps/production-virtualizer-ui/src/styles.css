@@ -186,9 +186,54 @@ select {
 }
 
 .detail-panel,
+.robot-fleet-panel,
 .stack-panel,
 .timeline-panel {
   min-height: 280px;
+}
+
+.robot-fleet-list {
+  display: grid;
+  gap: 12px;
+}
+
+.robot-card,
+.apm-card {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(14, 28, 44, 0.92);
+}
+
+.robot-card__header,
+.apm-card__header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.robot-card__header span,
+.apm-card__header span {
+  color: #7dd3c4;
+}
+
+.robot-card__grid,
+.apm-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.robot-card__grid span,
+.apm-card__grid span {
+  display: block;
+  color: #8ea7bb;
+  font-size: 0.82rem;
+}
+
+.robot-card__grid strong,
+.apm-card__grid strong {
+  display: block;
+  margin-top: 4px;
 }
 
 .detail-block {

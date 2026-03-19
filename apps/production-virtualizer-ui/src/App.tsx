@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { connectCoreRealtime } from "./services/coreRealtime";
-import { fetchDatabaseStatus, fetchRunningSchedulers } from "./services/coreApi";
+import { fetchDatabaseStatus, fetchRunningSchedulers, fetchSimulationSnapshot } from "./services/coreApi";
 import { ControlTabs } from "./components/ControlTabs";
 import { DetailPanel } from "./components/DetailPanel";
 import { EventTimeline } from "./components/EventTimeline";
 import { FloorView } from "./components/FloorView";
 import { PalletStackPanel } from "./components/PalletStackPanel";
+import { RobotFleetPanel } from "./components/RobotFleetPanel";
 import { StatCard } from "./components/StatCard";
 import { useSimulationStore } from "./store/simulationStore";
 
@@ -23,12 +24,15 @@ export default function App() {
     schedulerSummary,
     liveDeviceCount,
     lastRealtimeAt,
+    robots,
+    apmStatus,
     tick,
     setSelectedPanel,
     setConnectionStatus,
     setDatabaseAlive,
     setSchedulerSummary,
-    ingestCoreSnapshot
+    ingestCoreSnapshot,
+    ingestSimulationSnapshot
   } = useSimulationStore();
 
   useEffect(() => {
@@ -44,13 +48,18 @@ export default function App() {
 
     const loadCoreStatus = async () => {
       try {
-        const [dbAlive, schedulers] = await Promise.all([fetchDatabaseStatus(), fetchRunningSchedulers()]);
+        const [dbAlive, schedulers, simulationSnapshot] = await Promise.all([
+          fetchDatabaseStatus(),
+          fetchRunningSchedulers(),
+          fetchSimulationSnapshot()
+        ]);
         if (cancelled) {
           return;
         }
 
         setDatabaseAlive(dbAlive);
         setSchedulerSummary(schedulers.replace("실행 중인 작업 목록: ", "") || "none");
+        ingestSimulationSnapshot(simulationSnapshot);
       } catch {
         if (cancelled) {
           return;
@@ -66,7 +75,15 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [setDatabaseAlive, setSchedulerSummary]);
+  }, [ingestSimulationSnapshot, setDatabaseAlive, setSchedulerSummary]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void fetchSimulationSnapshot().then(ingestSimulationSnapshot).catch(() => undefined);
+    }, 3000);
+
+    return () => window.clearInterval(timer);
+  }, [ingestSimulationSnapshot]);
 
   useEffect(() => {
     setConnectionStatus("connecting");
@@ -127,6 +144,7 @@ export default function App() {
           liveDeviceCount={liveDeviceCount}
           lastRealtimeAt={lastRealtimeAt}
         />
+        <RobotFleetPanel robots={robots} apmStatus={apmStatus} />
         <PalletStackPanel layers={palletLayers} />
         <EventTimeline events={events} />
       </section>

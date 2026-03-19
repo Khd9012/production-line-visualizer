@@ -76,3 +76,50 @@ export type TrackNode = {
   y: number;
   kind: "buffer" | "inspection";
 };
+
+export type CoreRobotInfo = {
+  workId: string;
+  robotNo: number;
+  loadingLine: number;
+  unLoadingLine: number;
+  mBoxCd: number;
+  totalOrderCount: number;
+  statusCode: number;
+  motionCode: number;
+  errorCode: number;
+  totalRt1Count: number;
+  totalRt2Count: number;
+  totalRt3Count: number;
+  totalRt4Count: number;
+  ready: boolean;
+};
+
+export type CoreApmStatus = {
+  workId: string;
+  layer: string;
+  orderQty: string;
+  completeQty: string;
+  process: string;
+  placeProcess: string;
+  status: string;
+  inputStatus: string;
+};
+
+export type CoreSimulationSnapshot = {
+  robots: CoreRobotInfo[];
+  apmStatus: CoreApmStatus;
+  bmStatus: Record<string, {
+    workId: string;
+    deviceCode: string;
+    status: string;
+    statusCode: string;
+    processCode: string;
+    orderQty: number;
+    compQty: number;
+    labelCompQty: number;
+    mBoxCd: number;
+  }>;
+  palletMotion: Record<string, string>;
+  lineStates: Record<string, { state: string }>;
+  deviceCount: number;
+};

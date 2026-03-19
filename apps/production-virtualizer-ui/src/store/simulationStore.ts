@@ -1,6 +1,17 @@
 import { create } from "zustand";
 import { railSegments, trackNodeMap } from "../data/layout";
-import type { Cargo, CargoState, CoreDeviceStatus, EventItem, PalletCell, PalletLayer, RobotState } from "../types";
+import type {
+  Cargo,
+  CargoState,
+  CoreApmStatus,
+  CoreDeviceStatus,
+  CoreRobotInfo,
+  CoreSimulationSnapshot,
+  EventItem,
+  PalletCell,
+  PalletLayer,
+  RobotState
+} from "../types";
 
 type SimulationState = {
   cargos: Cargo[];
@@ -17,12 +28,15 @@ type SimulationState = {
   lastRealtimeAt: string | null;
   stackedCargoIds: string[];
   lastInspectionWorkIds: string[];
+  robots: CoreRobotInfo[];
+  apmStatus: CoreApmStatus | null;
   tick: () => void;
   setSelectedPanel: (panel: "overview" | "robot" | "pallet") => void;
   setConnectionStatus: (status: "connecting" | "live" | "offline") => void;
   setDatabaseAlive: (alive: boolean) => void;
   setSchedulerSummary: (summary: string) => void;
   ingestCoreSnapshot: (snapshot: CoreDeviceStatus[]) => void;
+  ingestSimulationSnapshot: (snapshot: CoreSimulationSnapshot) => void;
 };
 
 const palette = ["#ffb84d", "#4ecdc4", "#ff6b6b", "#ffd166", "#7dd3c4", "#8ea7ff"];
@@ -160,6 +174,8 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   lastRealtimeAt: null,
   stackedCargoIds: ["L1-1", "L1-2", "L1-3", "L1-4", "L1-5", "L1-6", "L1-7", "L1-8", "L1-9", "L2-1", "L2-2"],
   lastInspectionWorkIds: [],
+  robots: [],
+  apmStatus: null,
   events: [
     { id: "evt-1", time: formatTime(), title: "QC Flow", detail: "Inspection line feeding palletizer zone", tone: "accent" },
     { id: "evt-2", time: formatTime(), title: "Pallet Build", detail: "Layer 2 now filling with verified cargo", tone: "normal" }
@@ -168,6 +184,36 @@ export const useSimulationStore = create<SimulationState>((set) => ({
   setConnectionStatus: (connectionStatus) => set({ connectionStatus }),
   setDatabaseAlive: (databaseAlive) => set({ databaseAlive }),
   setSchedulerSummary: (schedulerSummary) => set({ schedulerSummary }),
+  ingestSimulationSnapshot: (snapshot) =>
+    set((state) => {
+      const apmStatus = snapshot.apmStatus;
+      const orderQty = Number.parseInt(apmStatus?.orderQty ?? "0", 10);
+      const completeQty = Number.parseInt(apmStatus?.completeQty ?? "0", 10);
+      const derivedStackCount = orderQty > 0 ? Math.min(27, Math.floor(completeQty / 3)) : state.stackedCargoIds.length;
+      const stackedCargoIds =
+        derivedStackCount > state.stackedCargoIds.length
+          ? [
+              ...state.stackedCargoIds,
+              ...Array.from({ length: derivedStackCount - state.stackedCargoIds.length }, (_, index) => `APM-${state.stackedCargoIds.length + index + 1}`)
+            ].slice(-27)
+          : state.stackedCargoIds.slice(0, derivedStackCount || state.stackedCargoIds.length);
+
+      return {
+        robots: snapshot.robots ?? [],
+        apmStatus,
+        palletLayers: createLayersFromStack(stackedCargoIds),
+        stackedCargoIds,
+        events:
+          snapshot.robots.length > 0
+            ? appendEvent(
+                state.events,
+                `Robot ${snapshot.robots[0].robotNo} cycle`,
+                `Load L${snapshot.robots[0].loadingLine} -> Unload L${snapshot.robots[0].unLoadingLine}`,
+                "normal"
+              )
+            : state.events
+      };
+    }),
   ingestCoreSnapshot: (snapshot) =>
     set((state) => {
       const cargos = toCargoFromSnapshot(snapshot);

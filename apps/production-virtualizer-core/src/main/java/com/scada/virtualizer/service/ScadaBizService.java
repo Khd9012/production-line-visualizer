@@ -979,6 +979,26 @@ public class ScadaBizService {
         return mdDeviceStatusList;
     }
 
+    public List<PropPltzInfo> getPropPltzInfos() {
+        return new ArrayList<>(propPltzInfos);
+    }
+
+    public EqApmStatus getEqApmStatus() {
+        return eqApmStatus;
+    }
+
+    public Map<String, BmStatus> getBmStatusMap() {
+        return new HashMap<>(bmStatusMap);
+    }
+
+    public Map<String, String> getPlateMotion() {
+        return new LinkedHashMap<>(plateMotion);
+    }
+
+    public Map<String, LineSimulationInfo> getLineSimulationStates() {
+        return new HashMap<>(lineSimulationStates);
+    }
+
     private final Map<String, Integer> activeIndexMap = new HashMap<>();
     private final Map<String, Integer> moveCountMap = new HashMap<>();
 

@@ -7,6 +7,7 @@ import com.scada.virtualizer.repository.dto.biz.PtnGroupModDto;
 import com.scada.virtualizer.repository.dto.biz.RobotOrderDto;
 import com.scada.virtualizer.repository.dto.biz.ScadaPalletPartInfoDto;
 import com.scada.virtualizer.repository.dto.equipment.EqRouteOrder;
+import com.scada.virtualizer.repository.dto.equipment.PropPltzInfo;
 import com.scada.virtualizer.repository.mapper.biz.MdDeviceErrorNotiMapper;
 import com.scada.virtualizer.repository.mapper.biz.ScadaManualOrderMapper;
 import com.scada.virtualizer.repository.mapper.biz.ScadaPalletInfoMapper;
@@ -128,6 +129,21 @@ public class ScadaApiController {
     @PostMapping("/plc/status/list")
     public ResponseEntity<?> getPlcStatusList() throws Exception {
         return ResponseEntity.ok(this.mdDeviceCtrlMapper.getMdDeviceCtrlOfCfgModel("2"));
+    }
+
+    @GetMapping("/simulation/snapshot")
+    public ResponseEntity<?> getSimulationSnapshot() {
+        Map<String, Object> payload = new HashMap<>();
+        List<PropPltzInfo> robots = scadaBizService.getPropPltzInfos();
+
+        payload.put("robots", robots);
+        payload.put("apmStatus", scadaBizService.getEqApmStatus());
+        payload.put("bmStatus", scadaBizService.getBmStatusMap());
+        payload.put("palletMotion", scadaBizService.getPlateMotion());
+        payload.put("lineStates", scadaBizService.getLineSimulationStates());
+        payload.put("deviceCount", scadaBizService.getDeviceStatusAllList().size());
+
+        return ResponseEntity.ok(payload);
     }
 
     @PostMapping("/rgv/work/list")
