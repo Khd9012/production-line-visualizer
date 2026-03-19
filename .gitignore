@@ -5,6 +5,9 @@ Thumbs.db
 **/.idea/
 **/.gradle/
 **/build/
+**/node_modules/
+**/dist/
+**/*.tsbuildinfo
 **/logs/
 **/data/
 **/out/

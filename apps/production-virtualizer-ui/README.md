@@ -1,7 +1,15 @@
 # production-virtualizer-ui
 
-Reserved for the frontend application that will visualize the production virtualizer backend.
+Realtime 2D digital twin UI for:
 
-Suggested next step:
+- rail cargo flow
+- palletizer motion
+- pallet layer stacking
+- live event timeline
 
-- Initialize a UI app here, then connect it to `../production-virtualizer-core`
+## Run
+
+```bash
+npm install
+npm run dev
+```
