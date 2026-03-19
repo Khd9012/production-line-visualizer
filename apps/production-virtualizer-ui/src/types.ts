@@ -17,6 +17,9 @@ export type Cargo = {
   line: string;
   state: CargoState;
   color: string;
+  x?: number;
+  y?: number;
+  sourceDeviceCode?: string;
 };
 
 export type PalletCell = {
@@ -63,4 +66,13 @@ export type CoreDeviceStatus = {
   workId?: string;
   triggeredAt?: string;
   detail?: Record<string, string>;
+};
+
+export type TrackNode = {
+  deviceCode: string;
+  line: string;
+  label: string;
+  x: number;
+  y: number;
+  kind: "buffer" | "inspection";
 };
